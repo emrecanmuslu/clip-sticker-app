@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/audio_provider.dart';
 
-class FolderListItem extends StatelessWidget {
+class FolderListItem extends ConsumerWidget {
   final Folder folder;
   final VoidCallback onTap;
   final VoidCallback onRename;
@@ -14,7 +15,7 @@ class FolderListItem extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
@@ -47,13 +48,13 @@ class FolderListItem extends StatelessWidget {
               ),
             ),
           ],
-          onSelected: (value) {
+          onSelected: (value) async {
             switch (value) {
               case 'rename':
-                _showRenameDialog(context);
+                await _showRenameDialog(context, ref);
                 break;
               case 'delete':
-                _showDeleteDialog(context);
+                await _showDeleteDialog(context, ref);
                 break;
             }
           },
@@ -63,7 +64,7 @@ class FolderListItem extends StatelessWidget {
     );
   }
 
-  Future<void> _showRenameDialog(BuildContext context) async {
+  Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController(text: folder.name);
     return showDialog(
       context: context,
@@ -83,7 +84,11 @@ class FolderListItem extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              onRename();
+              if (controller.text.isNotEmpty) {
+                ref
+                    .read(audioProvider.notifier)
+                    .renameFolder(folder, controller.text);
+              }
               Navigator.pop(context);
             },
             child: const Text('Kaydet'),
@@ -93,13 +98,13 @@ class FolderListItem extends StatelessWidget {
     );
   }
 
-  Future<void> _showDeleteDialog(BuildContext context) async {
+  Future<void> _showDeleteDialog(BuildContext context, WidgetRef ref) async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Klasörü Sil'),
         content: const Text(
-          'Bu klasörü silmek istediğinizden emin misiniz?\nKlasör içindeki tüm ses klipleri taşınacaktır.',
+          'Bu klasörü silmek istediğinizden emin misiniz?\nKlasör içindeki tüm ses klipleri silinecektir.',
         ),
         actions: [
           TextButton(
@@ -108,7 +113,7 @@ class FolderListItem extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              // Silme işlemi
+              ref.read(audioProvider.notifier).deleteFolder(folder);
               Navigator.pop(context);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
