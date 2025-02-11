@@ -51,6 +51,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
       String originalFileName = widget.audioPath.split('/').last;
       originalFileName = originalFileName.replaceAll(RegExp(r'\.mp3$'), '');
 
+      _nameController.text = originalFileName;
+
       await ref.read(clipEditorProvider.notifier).loadAudio(widget.audioPath);
       setState(() => _isInitialized = true);
     } catch (e) {
