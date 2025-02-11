@@ -8,10 +8,12 @@ import '../widgets/audio_waveform.dart';
 
 class ClipEditorScreen extends ConsumerStatefulWidget {
   final String audioPath;
+  final String? folderId;
 
   const ClipEditorScreen({
     super.key,
     required this.audioPath,
+    this.folderId,
   });
 
   @override
@@ -103,7 +105,6 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
     }
 
     String clipName = _nameController.text;
-    // Eğer Klip_ öneki yoksa ekle
     if (!clipName.startsWith('Klip_')) {
       clipName = 'Klip_$clipName';
     }
@@ -113,11 +114,12 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         .saveClip(widget.audioPath, clipName);
 
     if (outputPath != null) {
+      if (!mounted) return;
+
       final audioNotifier = ref.read(audioProvider.notifier);
-      await audioNotifier.addClip(File(outputPath));
-      if (mounted) {
-        Navigator.of(context).pop(true);
-      }
+      await audioNotifier.addClip(File(outputPath), folderId: widget.folderId);
+
+      Navigator.of(context).pop();
     }
   }
 
@@ -152,7 +154,15 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Klip İsmi',
                       border: OutlineInputBorder(),
+                      hintText: 'Klip için özel bir isim girin',
                     ),
+                    onChanged: (value) {
+                      final sanitizedName = value.trim();
+                      _nameController.text = sanitizedName;
+                      _nameController.selection = TextSelection.fromPosition(
+                        TextPosition(offset: sanitizedName.length),
+                      );
+                    },
                   ),
                   const SizedBox(height: 24),
                   Text(

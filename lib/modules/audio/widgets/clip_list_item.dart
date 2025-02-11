@@ -18,8 +18,7 @@ class ClipListItem extends ConsumerWidget {
     required this.isPlaying,
   });
 
-  String _formatDuration(Duration? duration) {
-    if (duration == null) return '--:--';
+  String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     String minutes = twoDigits(duration.inMinutes.remainder(60));
     String seconds = twoDigits(duration.inSeconds.remainder(60));
@@ -55,6 +54,10 @@ class ClipListItem extends ConsumerWidget {
                   clip.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  _formatDuration(Duration(seconds: clip.duration.toInt())),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

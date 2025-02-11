@@ -194,16 +194,15 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
     }
   }
 
-  Future<void> addClip(File file, {String? folderId, double? duration}) async {
+  Future<void> addClip(File file,
+      {String? folderId, double? duration, String? customName}) async {
     try {
       final currentState = state.value!;
 
-      // Dosyayı uygulama klasörüne kopyala
+      final randomFileName = '${DateTime.now().millisecondsSinceEpoch}.mp3';
       final appDir = await getApplicationDocumentsDirectory();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.mp3';
-      final newPath = '${appDir.path}/audios/$fileName';
+      final newPath = '${appDir.path}/audios/$randomFileName';
 
-      // Dizinin var olduğundan emin ol
       final audioDir = Directory('${appDir.path}/audios');
       if (!await audioDir.exists()) {
         await audioDir.create(recursive: true);
@@ -213,7 +212,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
 
       final newClip = AudioClip(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: file.path.split('/').last,
+        name: customName ?? file.path.split('/').last,
         path: newPath,
         folderId: folderId,
         duration: duration ?? 0,

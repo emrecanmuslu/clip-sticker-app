@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/audio_provider.dart';
 import '../screens/clip_editor_screen.dart';
 
-class AddMenu extends StatelessWidget {
+class AddMenu extends ConsumerWidget {
   const AddMenu({super.key});
 
-  Future<void> _pickAudioFile(BuildContext context) async {
+  Future<void> _pickAudioFile(BuildContext context, WidgetRef ref) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -18,17 +18,20 @@ class AddMenu extends StatelessWidget {
       if (result != null && result.files.single.path != null) {
         if (!context.mounted) return;
 
-        final editResult = await Navigator.push<bool>(
+        final currentState = ref.read(audioProvider).value;
+        final currentFolderId = currentState?.currentFolderId;
+
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ClipEditorScreen(
               audioPath: result.files.single.path!,
+              folderId: currentFolderId,
             ),
           ),
         );
 
-        // Menüyü kapat
-        if (context.mounted && editResult == true) {
+        if (context.mounted) {
           Navigator.pop(context);
         }
       }
@@ -42,7 +45,7 @@ class AddMenu extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Consumer(
       builder: (context, ref, child) {
         final audioState = ref.watch(audioProvider);
@@ -76,7 +79,7 @@ class AddMenu extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.audio_file),
                   title: const Text('MP3 Seç'),
-                  onTap: () => _pickAudioFile(context),
+                  onTap: () => _pickAudioFile(context, ref),
                 ),
                 ListTile(
                   leading: const Icon(Icons.youtube_searched_for),
