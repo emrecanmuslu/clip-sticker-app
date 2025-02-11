@@ -11,11 +11,33 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayer> {
     });
   }
 
+  String? _currentPath;
+  String? get currentPath => _currentPath;
+
   Future<void> loadFile(String filePath) async {
     try {
       await state.setFilePath(filePath);
     } catch (e) {
       print('Ses yükleme hatası: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> playClip(String path) async {
+    try {
+      if (_currentPath == path && state.playing) {
+        await pause();
+        return;
+      }
+
+      if (_currentPath != path) {
+        await state.setFilePath(path);
+        _currentPath = path;
+      }
+
+      await state.play();
+    } catch (e) {
+      print('Oynatma hatası: $e');
       rethrow;
     }
   }
@@ -64,7 +86,9 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayer> {
   }
 
   Stream<Duration?> get positionStream => state.positionStream;
+
   Stream<Duration?> get durationStream => state.durationStream;
+
   Stream<PlayerState> get playerStateStream => state.playerStateStream;
 
   @override

@@ -6,16 +6,12 @@ import '../providers/audio_provider.dart';
 
 class ClipListItem extends ConsumerWidget {
   final AudioClip clip;
-  final VoidCallback onPlay;
   final VoidCallback onShare;
-  final bool isPlaying;
 
   const ClipListItem({
     super.key,
     required this.clip,
-    required this.onPlay,
     required this.onShare,
-    required this.isPlaying,
   });
 
   String _formatDuration(Duration duration) {
@@ -28,151 +24,99 @@ class ClipListItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final player = ref.watch(audioPlayerProvider);
+    final currentPath = ref.watch(audioPlayerProvider.notifier).currentPath;
+    final isCurrentClip = currentPath == clip.path;
 
-    // PlayerState'i dinleyelim
     return StreamBuilder<PlayerState>(
       stream: player.playerStateStream,
       builder: (context, snapshot) {
         final playerState = snapshot.data;
-        final isCurrentlyPlaying = isPlaying && playerState?.playing == true;
+        final isPlaying = isCurrentClip && playerState?.playing == true;
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: IconButton(
-                  icon: Icon(
-                    isCurrentlyPlaying ? Icons.pause_circle : Icons.play_circle,
-                    color: Theme.of(context).primaryColor,
-                    size: 32,
-                  ),
-                  onPressed: onPlay,
+          child: ListTile(
+            leading: IconButton(
+              icon: Icon(
+                isPlaying ? Icons.pause_circle : Icons.play_circle,
+                color: Theme.of(context).primaryColor,
+                size: 32,
+              ),
+              onPressed: () {
+                ref.read(audioPlayerProvider.notifier).playClip(clip.path);
+              },
+            ),
+            title: Text(
+              clip.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              _formatDuration(Duration(seconds: clip.duration.toInt())),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  onPressed: onShare,
                 ),
-                title: Text(
-                  clip.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  _formatDuration(Duration(seconds: clip.duration.toInt())),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.share),
-                      onPressed: onShare,
+                PopupMenuButton<String>(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'rename',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit),
+                          SizedBox(width: 8),
+                          Text('Yeniden Adlandır'),
+                        ],
+                      ),
                     ),
-                    PopupMenuButton<String>(
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'rename',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit),
-                              SizedBox(width: 8),
-                              Text('Yeniden Adlandır'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'move',
-                          child: Row(
-                            children: [
-                              Icon(Icons.folder),
-                              SizedBox(width: 8),
-                              Text('Taşı'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Sil', style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                        ),
-                      ],
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'rename':
-                            _showRenameDialog(context, ref);
-                            break;
-                          case 'move':
-                            _showMoveDialog(context, ref);
-                            break;
-                          case 'delete':
-                            _showDeleteDialog(context, ref);
-                            break;
-                        }
-                      },
+                    const PopupMenuItem(
+                      value: 'move',
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder),
+                          SizedBox(width: 8),
+                          Text('Taşı'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Sil', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-              ),
-              if (isPlaying) ...[
-                StreamBuilder<Duration?>(
-                  stream: player.positionStream,
-                  builder: (context, snapshot) {
-                    final position = snapshot.data ?? Duration.zero;
-                    return StreamBuilder<Duration?>(
-                      stream: player.durationStream,
-                      builder: (context, durationSnapshot) {
-                        final duration = durationSnapshot.data ?? Duration.zero;
-                        if (duration.inMilliseconds == 0) {
-                          return const SizedBox.shrink();
-                        }
-                        return Column(
-                          children: [
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16.0),
-                              child: LinearProgressIndicator(
-                                value: duration.inMilliseconds > 0
-                                    ? position.inMilliseconds /
-                                        duration.inMilliseconds
-                                    : 0.0,
-                                backgroundColor: Colors.grey[300],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).primaryColor,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 8.0,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(_formatDuration(position)),
-                                  Text(_formatDuration(duration)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'rename':
+                        await _showRenameDialog(context, ref);
+                        break;
+                      case 'move':
+                        await _showMoveDialog(context, ref);
+                        break;
+                      case 'delete':
+                        await _showDeleteDialog(context, ref);
+                        break;
+                    }
                   },
                 ),
               ],
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  // Bu metodları ClipListItem sınıfına ekleyin
   Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController(text: clip.name);
     return showDialog(

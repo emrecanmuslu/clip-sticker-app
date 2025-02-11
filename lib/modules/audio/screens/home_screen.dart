@@ -13,7 +13,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String? _currentPlayingPath;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -196,14 +195,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       delegate: SliverChildBuilderDelegate(
         (context, index) => ClipListItem(
           clip: clips[index],
-          isPlaying: _currentPlayingPath == clips[index].path,
-          onPlay: () {
-            setState(() {
-              _currentPlayingPath = _currentPlayingPath == clips[index].path
-                  ? null
-                  : clips[index].path;
-            });
-          },
           onShare: () =>
               ref.read(audioProvider.notifier).shareClip(clips[index]),
         ),
