@@ -113,11 +113,13 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         .read(clipEditorProvider.notifier)
         .saveClip(widget.audioPath, clipName);
 
-    if (outputPath != null) {
-      if (!mounted) return;
-
+    if (outputPath != null && mounted) {
       final audioNotifier = ref.read(audioProvider.notifier);
-      await audioNotifier.addClip(File(outputPath), folderId: widget.folderId);
+      await audioNotifier.addClip(File(outputPath),
+          folderId: widget.folderId,
+          customName: clipName,
+          keepFolderId: true // Yeni parametre ekledik
+          );
 
       Navigator.of(context).pop();
     }

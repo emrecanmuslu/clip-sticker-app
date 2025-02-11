@@ -195,7 +195,11 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   }
 
   Future<void> addClip(File file,
-      {String? folderId, double? duration, String? customName}) async {
+      {String? folderId,
+      double? duration,
+      String? customName,
+      bool keepFolderId = false // Yeni parametre
+      }) async {
     try {
       final currentState = state.value!;
 
@@ -221,7 +225,9 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
       final updatedClips = [...currentState.clips, newClip];
       await _saveToPrefs(currentState.folders, updatedClips);
 
-      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
+      state = AsyncValue.data(currentState.copyWith(
+          clips: updatedClips,
+          currentFolderId: keepFolderId ? currentState.currentFolderId : null));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -230,8 +236,8 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   Future<void> deleteClip(AudioClip clip) async {
     try {
       final currentState = state.value!;
+      final currentFolderId = currentState.currentFolderId;
 
-      // Dosyayı sil
       final file = File(clip.path);
       if (await file.exists()) {
         await file.delete();
@@ -241,7 +247,10 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
           currentState.clips.where((c) => c.id != clip.id).toList();
       await _saveToPrefs(currentState.folders, updatedClips);
 
-      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
+      state = AsyncValue.data(currentState.copyWith(
+          clips: updatedClips,
+          currentFolderId: currentFolderId // Mevcut klasör bilgisini koru
+          ));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
