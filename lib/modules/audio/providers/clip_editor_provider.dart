@@ -102,10 +102,8 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
       final outputFileName = '${DateTime.now().millisecondsSinceEpoch}_$clipName.mp3';
       outputPath = path.join(appDir.path, 'audios', outputFileName);
 
-      // Dizinin var olduğundan emin ol
       await Directory(path.dirname(outputPath)).create(recursive: true);
 
-      // FFmpeg ile ses kesme işlemi
       final session = await FFmpegKit.execute(
         '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} -c:a libmp3lame -q:a 2 "$outputPath"'
       );

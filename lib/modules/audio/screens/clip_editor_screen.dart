@@ -48,11 +48,13 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         shouldExtractWaveform: true,
       );
 
-      // Dosya adını doğru şekilde ayarla
+      // Ses dosyasının süresini al
+      final durationMs = await _playerController.getDuration() ?? 0;
+      final durationSeconds = durationMs / 1000; // milisaniyeden saniyeye çevir
+
       String originalFileName = widget.audioPath.split('/').last;
       originalFileName = originalFileName.replaceAll(RegExp(r'\.mp3$'), '');
 
-      // Klip_ öneki yoksa ekle
       if (!_nameController.text.startsWith('Klip_')) {
         _nameController.text = 'Klip_$originalFileName';
       }
@@ -60,7 +62,6 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
       await ref.read(clipEditorProvider.notifier).loadAudio(widget.audioPath);
       setState(() => _isInitialized = true);
     } catch (e) {
-      print('Player başlatma hatası: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ses dosyası yüklenemedi: $e')),
@@ -105,9 +106,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
     }
 
     String clipName = _nameController.text;
-    if (!clipName.startsWith('Klip_')) {
-      clipName = 'Klip_$clipName';
-    }
+    final editorState = ref.read(clipEditorProvider);
+    final clipDuration = editorState.endTime - editorState.startTime;
 
     final outputPath = await ref
         .read(clipEditorProvider.notifier)
@@ -118,8 +118,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
       await audioNotifier.addClip(File(outputPath),
           folderId: widget.folderId,
           customName: clipName,
-          keepFolderId: true // Yeni parametre ekledik
-          );
+          duration: clipDuration,
+          keepFolderId: true);
 
       Navigator.of(context).pop();
     }
