@@ -48,16 +48,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         shouldExtractWaveform: true,
       );
 
-      // Ses dosyasının süresini al
-      final durationMs = await _playerController.getDuration() ?? 0;
-      final durationSeconds = durationMs / 1000; // milisaniyeden saniyeye çevir
-
       String originalFileName = widget.audioPath.split('/').last;
       originalFileName = originalFileName.replaceAll(RegExp(r'\.mp3$'), '');
-
-      if (!_nameController.text.startsWith('Klip_')) {
-        _nameController.text = 'Klip_$originalFileName';
-      }
 
       await ref.read(clipEditorProvider.notifier).loadAudio(widget.audioPath);
       setState(() => _isInitialized = true);
