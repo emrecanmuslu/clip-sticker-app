@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 // Ses Klibi Modeli
@@ -11,30 +13,52 @@ class AudioClip {
   final String path;
   final String? folderId;
   final DateTime createdAt;
+  final double duration;
 
   AudioClip({
     required this.id,
     required this.name,
     required this.path,
     this.folderId,
+    required this.duration,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
   AudioClip copyWith({
     String? name,
+    String? path,
     String? folderId,
+    double? duration,
   }) {
     return AudioClip(
       id: id,
       name: name ?? this.name,
-      path: path,
+      path: path ?? this.path,
       folderId: folderId ?? this.folderId,
+      duration: duration ?? this.duration,
       createdAt: createdAt,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'path': path,
+        'folderId': folderId,
+        'createdAt': createdAt.toIso8601String(),
+        'duration': duration,
+      };
+
+  static AudioClip fromJson(Map<String, dynamic> json) => AudioClip(
+        id: json['id'],
+        name: json['name'],
+        path: json['path'],
+        folderId: json['folderId'],
+        duration: json['duration'] ?? 0.0,
+        createdAt: DateTime.parse(json['createdAt']),
+      );
 }
 
-// Basitleştirilmiş Klasör Modeli
 class Folder {
   final String id;
   final String name;
@@ -46,6 +70,18 @@ class Folder {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  static Folder fromJson(Map<String, dynamic> json) => Folder(
+        id: json['id'],
+        name: json['name'],
+        createdAt: DateTime.parse(json['createdAt']),
+      );
+
   Folder copyWith({String? name}) {
     return Folder(
       id: id,
@@ -55,7 +91,6 @@ class Folder {
   }
 }
 
-// State Modeli
 class AudioState {
   final List<AudioClip> clips;
   final List<Folder> folders;
@@ -69,7 +104,6 @@ class AudioState {
     this.searchQuery,
   });
 
-  // Mevcut klasördeki klipleri getir
   List<AudioClip> get currentFolderClips {
     return clips.where((clip) {
       if (searchQuery?.isNotEmpty ?? false) {
@@ -80,7 +114,6 @@ class AudioState {
     }).toList();
   }
 
-  // Ana klasördeki (klasörsüz) klipleri getir
   List<AudioClip> get rootClips {
     return clips.where((clip) {
       if (searchQuery?.isNotEmpty ?? false) {
@@ -89,17 +122,6 @@ class AudioState {
       }
       return clip.folderId == null;
     }).toList();
-  }
-
-  // Klasörleri filtrele
-  List<Folder> get filteredFolders {
-    if (searchQuery?.isNotEmpty ?? false) {
-      return folders
-          .where((folder) =>
-              folder.name.toLowerCase().contains(searchQuery!.toLowerCase()))
-          .toList();
-    }
-    return folders;
   }
 
   AudioState copyWith({
@@ -118,6 +140,8 @@ class AudioState {
 }
 
 class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
+  static const String _prefsKey = 'audio_data';
+
   AudioNotifier() : super(const AsyncValue.loading());
 
   Future<void> initialize() async {
@@ -126,26 +150,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
         throw Exception('Gerekli izinler verilmedi');
       }
 
-      final appDir = await getApplicationDocumentsDirectory();
-      final audioDir = Directory('${appDir.path}/audios');
-      if (!await audioDir.exists()) {
-        await audioDir.create(recursive: true);
-      }
-
-      final files = await audioDir
-          .list()
-          .where((entity) => entity.path.toLowerCase().endsWith('.mp3'))
-          .toList();
-
-      final clips = files
-          .map((file) => AudioClip(
-                id: file.path.split('/').last.split('.').first,
-                name: file.path.split('/').last,
-                path: file.path,
-              ))
-          .toList();
-
-      state = AsyncValue.data(AudioState(clips: clips));
+      await _loadFromPrefs();
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -160,7 +165,36 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
     return true;
   }
 
-  Future<void> addClip(File file) async {
+  Future<void> _saveToPrefs(List<Folder> folders, List<AudioClip> clips) async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = {
+      'folders': folders.map((f) => f.toJson()).toList(),
+      'clips': clips.map((c) => c.toJson()).toList(),
+    };
+    await prefs.setString(_prefsKey, json.encode(data));
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dataString = prefs.getString(_prefsKey);
+
+    if (dataString != null) {
+      final data = json.decode(dataString);
+      final folders =
+          (data['folders'] as List).map((f) => Folder.fromJson(f)).toList();
+      final clips =
+          (data['clips'] as List).map((c) => AudioClip.fromJson(c)).toList();
+
+      state = AsyncValue.data(AudioState(
+        folders: folders,
+        clips: clips,
+      ));
+    } else {
+      state = AsyncValue.data(AudioState());
+    }
+  }
+
+  Future<void> addClip(File file, {String? folderId, double? duration}) async {
     try {
       final currentState = state.value!;
 
@@ -168,18 +202,27 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
       final appDir = await getApplicationDocumentsDirectory();
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.mp3';
       final newPath = '${appDir.path}/audios/$fileName';
+
+      // Dizinin var olduğundan emin ol
+      final audioDir = Directory('${appDir.path}/audios');
+      if (!await audioDir.exists()) {
+        await audioDir.create(recursive: true);
+      }
+
       await file.copy(newPath);
 
       final newClip = AudioClip(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: file.path.split('/').last,
         path: newPath,
-        folderId: currentState.currentFolderId,
+        folderId: folderId,
+        duration: duration ?? 0,
       );
 
-      state = AsyncValue.data(currentState.copyWith(
-        clips: [...currentState.clips, newClip],
-      ));
+      final updatedClips = [...currentState.clips, newClip];
+      await _saveToPrefs(currentState.folders, updatedClips);
+
+      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -195,9 +238,11 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
         await file.delete();
       }
 
-      state = AsyncValue.data(currentState.copyWith(
-        clips: currentState.clips.where((c) => c.id != clip.id).toList(),
-      ));
+      final updatedClips =
+          currentState.clips.where((c) => c.id != clip.id).toList();
+      await _saveToPrefs(currentState.folders, updatedClips);
+
+      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -214,6 +259,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
         return c;
       }).toList();
 
+      await _saveToPrefs(currentState.folders, updatedClips);
       state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
@@ -238,39 +284,52 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
     }
   }
 
-  // Klasör oluştur
   Future<void> createFolder(String name) async {
     if (state.value == null) return;
 
     try {
+      final currentState = state.value!;
+
       final newFolder = Folder(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: name,
       );
 
+      final updatedFolders = [...currentState.folders, newFolder];
+      await _saveToPrefs(updatedFolders, currentState.clips);
+
       state = AsyncValue.data(state.value!.copyWith(
-        folders: [...state.value!.folders, newFolder],
+        folders: updatedFolders,
       ));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
   }
 
-  // Klasör sil
   Future<void> deleteFolder(Folder folder) async {
-    if (state.value == null) return;
-
     try {
-      // Klasördeki klipleri ana klasöre taşı
-      final updatedClips = state.value!.clips.map((clip) {
-        if (clip.folderId == folder.id) {
-          return clip.copyWith(folderId: null);
-        }
-        return clip;
-      }).toList();
+      final currentState = state.value!;
 
-      state = AsyncValue.data(state.value!.copyWith(
-        folders: state.value!.folders.where((f) => f.id != folder.id).toList(),
+      // Klasördeki tüm klipleri sil
+      for (var clip
+          in currentState.clips.where((c) => c.folderId == folder.id)) {
+        final file = File(clip.path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+
+      // Klasörü ve klipleri state'den kaldır
+      final updatedClips = currentState.clips
+          .where((clip) => clip.folderId != folder.id)
+          .toList();
+      final updatedFolders =
+          currentState.folders.where((f) => f.id != folder.id).toList();
+
+      await _saveToPrefs(updatedFolders, updatedClips);
+
+      state = AsyncValue.data(currentState.copyWith(
+        folders: updatedFolders,
         clips: updatedClips,
         currentFolderId: null,
       ));
@@ -289,6 +348,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
         return c;
       }).toList();
 
+      await _saveToPrefs(currentState.folders, updatedClips);
       state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
@@ -306,13 +366,13 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
         return f;
       }).toList();
 
+      await _saveToPrefs(updatedFolders, currentState.clips);
       state = AsyncValue.data(currentState.copyWith(folders: updatedFolders));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
   }
 
-  // Klasör seç
   void setCurrentFolder(String? folderId) {
     if (state.value == null) return;
     state = AsyncValue.data(state.value!.copyWith(currentFolderId: folderId));

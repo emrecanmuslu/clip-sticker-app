@@ -43,44 +43,56 @@ class AddMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              'Yeni Ekle',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+    return Consumer(
+      builder: (context, ref, child) {
+        final audioState = ref.watch(audioProvider);
+
+        return audioState.when(
+          data: (state) => Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Yeni Ekle',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                // Sadece ana klasördeyken klasör oluşturma seçeneğini göster
+                if (state.currentFolderId == null)
+                  ListTile(
+                    leading: const Icon(Icons.create_new_folder),
+                    title: const Text('Yeni Klasör'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showNewFolderDialog(context);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.audio_file),
+                  title: const Text('MP3 Seç'),
+                  onTap: () => _pickAudioFile(context),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.youtube_searched_for),
+                  title: const Text("YouTube'dan İndir"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // YouTube arama ekranına git
+                  },
+                ),
+              ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.create_new_folder),
-            title: const Text('Yeni Klasör'),
-            onTap: () {
-              Navigator.pop(context);
-              _showNewFolderDialog(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.audio_file),
-            title: const Text('MP3 Seç'),
-            onTap: () => _pickAudioFile(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.youtube_searched_for),
-            title: const Text("YouTube'dan İndir"),
-            onTap: () {
-              Navigator.pop(context);
-              // YouTube arama ekranına git
-            },
-          ),
-        ],
-      ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('Hata: $error')),
+        );
+      },
     );
   }
 
