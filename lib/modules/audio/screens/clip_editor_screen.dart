@@ -180,11 +180,6 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
                           .read(clipEditorProvider.notifier)
                           .updateTimeRange(start, end);
                     },
-                    waveColor: Colors.grey.shade300,
-                    selectedColor:
-                        Theme.of(context).primaryColor.withOpacity(0.5),
-                    backgroundColor: Colors.white,
-                    height: 120,
                   ),
                   const SizedBox(height: 24),
                   IconButton(
