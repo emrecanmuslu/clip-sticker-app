@@ -201,7 +201,6 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
     final currentState = ref.read(audioProvider).value;
     if (currentState == null) return;
 
-    // Mevcut klasör ID'sini al
     final currentFolderId = widget.clip.folderId;
 
     return showDialog(
@@ -212,7 +211,6 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Ana klasöre taşıma seçeneğini sadece klasör içindeki klipler için göster
               if (currentFolderId != null)
                 ListTile(
                   leading: const Icon(Icons.folder_open),
@@ -223,14 +221,22 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
                         .moveClipToFolder(widget.clip, null);
                     if (context.mounted) {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('${widget.clip.name}, ana klasöre taşındı'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     }
                   },
                 ),
               const Divider(),
               ...currentState.folders.map((folder) {
-                // Klip zaten bu klasördeyse gösterme
-                if (folder.id == currentFolderId)
+                if (folder.id == currentFolderId) {
                   return const SizedBox.shrink();
+                }
 
                 return ListTile(
                   leading: const Icon(Icons.folder),
@@ -241,11 +247,18 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
                         .moveClipToFolder(widget.clip, folder.id);
                     if (context.mounted) {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('${widget.clip.name}, ${folder.name} klasörüne taşındı'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     }
                   },
                 );
               }).where((widget) => widget is ListTile),
-              // Sadece ListTile'ları filtrele
             ],
           ),
         ),
