@@ -180,13 +180,15 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
             child: const Text('İptal'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               if (controller.text.isNotEmpty) {
-                ref
+                await ref
                     .read(audioProvider.notifier)
                     .renameClip(widget.clip, controller.text);
               }
-              Navigator.pop(context);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
             },
             child: const Text('Kaydet'),
           ),

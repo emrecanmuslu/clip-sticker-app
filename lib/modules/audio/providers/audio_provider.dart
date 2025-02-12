@@ -198,8 +198,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
       {String? folderId,
       double? duration,
       String? customName,
-      bool keepFolderId = false
-      }) async {
+      bool keepFolderId = false}) async {
     try {
       final currentState = state.value!;
 
@@ -259,6 +258,7 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   Future<void> renameClip(AudioClip clip, String newName) async {
     try {
       final currentState = state.value!;
+      final currentFolderId = currentState.currentFolderId;
 
       final updatedClips = currentState.clips.map((c) {
         if (c.id == clip.id) {
@@ -268,7 +268,9 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
       }).toList();
 
       await _saveToPrefs(currentState.folders, updatedClips);
-      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
+
+      state = AsyncValue.data(currentState.copyWith(
+          clips: updatedClips, currentFolderId: currentFolderId));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
