@@ -8,7 +8,6 @@ class YoutubeState {
   final bool isDownloading;
   final double downloadProgress;
   final String? error;
-  final String currentQuery;
 
   YoutubeState({
     this.searchResults = const [],
@@ -16,7 +15,6 @@ class YoutubeState {
     this.isDownloading = false,
     this.downloadProgress = 0.0,
     this.error,
-    this.currentQuery = '',
   });
 
   YoutubeState copyWith({
@@ -25,7 +23,6 @@ class YoutubeState {
     bool? isDownloading,
     double? downloadProgress,
     String? error,
-    String? currentQuery,
   }) {
     return YoutubeState(
       searchResults: searchResults ?? this.searchResults,
@@ -33,13 +30,11 @@ class YoutubeState {
       isDownloading: isDownloading ?? this.isDownloading,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       error: error,
-      currentQuery: currentQuery ?? this.currentQuery,
     );
   }
 
   // Geçerli arama durumunun boş olup olmadığını kontrol et
-  bool get hasNoResults =>
-      !isLoading && searchResults.isEmpty && currentQuery.isNotEmpty;
+  bool get hasNoResults => !isLoading && searchResults.isEmpty;
 }
 
 class YoutubeSearchNotifier extends StateNotifier<YoutubeState> {
@@ -60,7 +55,6 @@ class YoutubeSearchNotifier extends StateNotifier<YoutubeState> {
     state = state.copyWith(
       isLoading: true,
       error: null,
-      currentQuery: query,
       searchResults: [],
     );
 

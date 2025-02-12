@@ -76,11 +76,12 @@ class YoutubePreviewScreen extends ConsumerWidget {
             expandedHeight: 240,
             pinned: true,
             stretch: true,
-            flexibleSpace: FlexibleSpaceBar(
+            flexibleSpace: // Thumbnail ve play butonu bölümündeki Stack widget'ını şu şekilde güncelleyelim:
+                FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Thumbnail
+                  // En altta thumbnail
                   Image.network(
                     video.thumbnails.maxResUrl,
                     fit: BoxFit.cover,
@@ -104,41 +105,44 @@ class YoutubePreviewScreen extends ConsumerWidget {
                       child: const Icon(Icons.error),
                     ),
                   ),
-                  // Play butonu ve karartma efekti
+                  // Ortada gradient overlay
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.transparent,
+                          Colors.black.withOpacity(0.4),
+                          // Üst kısım için daha koyu
                           Colors.black.withOpacity(0.7),
+                          // Alt kısım için daha da koyu
                         ],
                       ),
                     ),
-                    child: Center(
-                      child: GestureDetector(
-                        onTap: () => _launchYouTube(context),
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                spreadRadius: 1,
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 40,
-                          ),
+                  ),
+                  // En üstte play butonu
+                  Center(
+                    child: GestureDetector(
+                      onTap: () => _launchYouTube(context),
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              spreadRadius: 1,
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 40,
                         ),
                       ),
                     ),

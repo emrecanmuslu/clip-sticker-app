@@ -117,55 +117,53 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
       appBar: AppBar(
         title: const Text('YouTube\'dan İndir'),
       ),
-      body: Column(
+      body: Stack(
+        // Column yerine Stack kullanıyoruz
         children: [
-          const YoutubeSearchBar(),
-          Expanded(
-            child: Stack(
-              children: [
-                // Video Listesi
-                if (youtubeState.searchResults.isEmpty &&
-                    !youtubeState.isLoading)
-                  const Center(
-                    child: Text('Aramak istediğiniz videoyu yazın'),
-                  )
-                else if (youtubeState.isLoading)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: youtubeState.searchResults.length,
-                    itemBuilder: (context, index) {
-                      final video = youtubeState.searchResults[index];
-                      return VideoListItem(
-                        video: video,
-                        isDownloading: youtubeState.isDownloading,
-                        onDownload: _downloadAndOpenEditor,
-                      );
-                    },
-                  ),
-
-                // İndirme Göstergesi
-                if (youtubeState.isDownloading)
-                  Container(
-                    color: Colors.black54,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const CircularProgressIndicator(color: Colors.white),
-                          const SizedBox(height: 16),
-                          Text(
-                            'İndiriliyor... %${youtubeState.downloadProgress.toStringAsFixed(1)}',
-                            style: const TextStyle(color: Colors.white),
+          Column(
+            children: [
+              const YoutubeSearchBar(),
+              Expanded(
+                child: youtubeState.searchResults.isEmpty &&
+                        !youtubeState.isLoading
+                    ? const Center(
+                        child: Text('Aramak istediğiniz videoyu yazın'),
+                      )
+                    : youtubeState.isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            itemCount: youtubeState.searchResults.length,
+                            itemBuilder: (context, index) {
+                              final video = youtubeState.searchResults[index];
+                              return VideoListItem(
+                                video: video,
+                                isDownloading: youtubeState.isDownloading,
+                                onDownload: _downloadAndOpenEditor,
+                              );
+                            },
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
+          // İndirme Göstergesi en üstte
+          if (youtubeState.isDownloading)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: Colors.white),
+                    const SizedBox(height: 16),
+                    Text(
+                      'İndiriliyor... %${youtubeState.downloadProgress.toStringAsFixed(1)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

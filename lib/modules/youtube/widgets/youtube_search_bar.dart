@@ -11,7 +11,6 @@ class YoutubeSearchBar extends ConsumerStatefulWidget {
 
 class _YoutubeSearchBarState extends ConsumerState<YoutubeSearchBar> {
   final TextEditingController _controller = TextEditingController();
-  bool _isSearching = false;
 
   @override
   void dispose() {
@@ -64,9 +63,8 @@ class _YoutubeSearchBarState extends ConsumerState<YoutubeSearchBar> {
                       )
                     : null,
               ),
-              onSubmitted: (_) => _handleSearch(),
               onChanged: (value) {
-                setState(() {});
+                setState(() {}); // Sadece UI güncellemesi için
               },
               textInputAction: TextInputAction.search,
             ),
