@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../youtube/screens/youtube_search_screen.dart';
 import '../providers/audio_provider.dart';
 import '../screens/clip_editor_screen.dart';
 
@@ -84,9 +85,25 @@ class AddMenu extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.youtube_searched_for),
                   title: const Text("YouTube'dan İndir"),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    // YouTube arama ekranına git
+
+                    if (!context.mounted) return;
+                    final result = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const YoutubeSearchScreen(),
+                      ),
+                    );
+
+                    // Eğer indirme başarılıysa ve mevcut context hala geçerliyse
+                    if (result == true && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Ses klibi başarıyla eklendi'),
+                        ),
+                      );
+                    }
                   },
                 ),
               ],
