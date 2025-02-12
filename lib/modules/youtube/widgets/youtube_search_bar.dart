@@ -81,8 +81,9 @@ class _YoutubeSearchBarState extends ConsumerState<YoutubeSearchBar> {
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: 0,
                 ),
+                minimumSize: const Size(0, 55),
               ),
               child: const Text('Ara'),
             ),
