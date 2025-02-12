@@ -127,7 +127,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
                 if (youtubeState.searchResults.isEmpty &&
                     !youtubeState.isLoading)
                   const Center(
-                    child: Text('Aramak istediğiniz şarkıyı yazın'),
+                    child: Text('Aramak istediğiniz videoyu yazın'),
                   )
                 else if (youtubeState.isLoading)
                   const Center(child: CircularProgressIndicator())

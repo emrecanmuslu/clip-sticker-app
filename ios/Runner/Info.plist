@@ -61,5 +61,9 @@
     <string>MP3 dosyalarınıza erişmek için izin gerekiyor</string>
     <key>NSDocumentsFolderUsageDescription</key>
     <string>MP3 dosyalarınızı seçmek için belge klasörüne erişim gerekiyor</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>youtube</string>
+    </array>
 </dict>
 </plist>
