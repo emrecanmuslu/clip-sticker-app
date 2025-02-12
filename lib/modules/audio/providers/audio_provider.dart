@@ -104,24 +104,47 @@ class AudioState {
     this.searchQuery,
   });
 
+  List<Folder> get filteredFolders {
+    if (currentFolderId != null) {
+      return [];
+    }
+
+    if (searchQuery?.isEmpty ?? true) {
+      return folders;
+    }
+
+    return folders
+        .where((folder) =>
+            folder.name.toLowerCase().contains(searchQuery!.toLowerCase()))
+        .toList();
+  }
+
   List<AudioClip> get currentFolderClips {
-    return clips.where((clip) {
-      if (searchQuery?.isNotEmpty ?? false) {
-        return clip.name.toLowerCase().contains(searchQuery!.toLowerCase()) &&
-            clip.folderId == currentFolderId;
-      }
-      return clip.folderId == currentFolderId;
-    }).toList();
+    if (currentFolderId == null) return [];
+
+    final folderClips = clips.where((clip) => clip.folderId == currentFolderId);
+
+    if (searchQuery?.isEmpty ?? true) {
+      return folderClips.toList();
+    }
+
+    return folderClips
+        .where((clip) =>
+            clip.name.toLowerCase().contains(searchQuery!.toLowerCase()))
+        .toList();
   }
 
   List<AudioClip> get rootClips {
-    return clips.where((clip) {
-      if (searchQuery?.isNotEmpty ?? false) {
-        return clip.name.toLowerCase().contains(searchQuery!.toLowerCase()) &&
-            clip.folderId == null;
-      }
-      return clip.folderId == null;
-    }).toList();
+    final clips = this.clips.where((clip) => clip.folderId == null);
+
+    if (searchQuery?.isEmpty ?? true) {
+      return clips.toList();
+    }
+
+    return clips
+        .where((clip) =>
+            clip.name.toLowerCase().contains(searchQuery!.toLowerCase()))
+        .toList();
   }
 
   AudioState copyWith({
@@ -279,7 +302,11 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   void search(String query) {
     try {
       final currentState = state.value!;
-      state = AsyncValue.data(currentState.copyWith(searchQuery: query));
+
+      state = AsyncValue.data(currentState.copyWith(
+        searchQuery: query,
+        currentFolderId: currentState.currentFolderId,
+      ));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -349,43 +376,44 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   }
 
   Future<void> moveClipToFolder(AudioClip clip, String? folderId) async {
-  try {
-    final currentState = state.value!;
+    try {
+      final currentState = state.value!;
 
-    // Eğer klip zaten hedef klasördeyse işlemi iptal et
-    if (clip.folderId == folderId) return;
+      // Eğer klip zaten hedef klasördeyse işlemi iptal et
+      if (clip.folderId == folderId) return;
 
-    // Debug için log
-    print('Moving clip from ${clip.folderId} to $folderId');
+      // Debug için log
+      print('Moving clip from ${clip.folderId} to $folderId');
 
-    final updatedClips = currentState.clips.map((c) {
-      if (c.id == clip.id) {
-        // Ana klasöre taşıma için folderId null olacak
-        return AudioClip(
-          id: c.id,
-          name: c.name,
-          path: c.path,
-          folderId: folderId, // null değeri ana klasöre taşıyacak
-          duration: c.duration,
-          createdAt: c.createdAt,
-        );
-      }
-      return c;
-    }).toList();
+      final updatedClips = currentState.clips.map((c) {
+        if (c.id == clip.id) {
+          // Ana klasöre taşıma için folderId null olacak
+          return AudioClip(
+            id: c.id,
+            name: c.name,
+            path: c.path,
+            folderId: folderId,
+            // null değeri ana klasöre taşıyacak
+            duration: c.duration,
+            createdAt: c.createdAt,
+          );
+        }
+        return c;
+      }).toList();
 
-    // Değişiklikleri kaydet
-    await _saveToPrefs(currentState.folders, updatedClips);
+      // Değişiklikleri kaydet
+      await _saveToPrefs(currentState.folders, updatedClips);
 
-    // State'i güncelle
-    state = AsyncValue.data(currentState.copyWith(
-      clips: updatedClips,
-      currentFolderId: currentState.currentFolderId,
-    ));
-  } catch (e, stack) {
-    print('Move error: $e');
-    state = AsyncValue.error(e, stack);
+      // State'i güncelle
+      state = AsyncValue.data(currentState.copyWith(
+        clips: updatedClips,
+        currentFolderId: currentState.currentFolderId,
+      ));
+    } catch (e, stack) {
+      print('Move error: $e');
+      state = AsyncValue.error(e, stack);
+    }
   }
-}
 
   Future<void> renameFolder(Folder folder, String newName) async {
     try {
@@ -407,7 +435,10 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
 
   void setCurrentFolder(String? folderId) {
     if (state.value == null) return;
-    state = AsyncValue.data(state.value!.copyWith(currentFolderId: folderId));
+    state = AsyncValue.data(state.value!.copyWith(
+      currentFolderId: folderId,
+      searchQuery: '',
+    ));
   }
 }
 

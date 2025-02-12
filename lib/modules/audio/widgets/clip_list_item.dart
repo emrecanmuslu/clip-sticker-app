@@ -205,70 +205,210 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
 
     return showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Klasöre Taşı'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (currentFolderId != null)
-                ListTile(
-                  leading: const Icon(Icons.folder_open),
-                  title: const Text('Ana Klasör'),
-                  onTap: () async {
-                    await ref
-                        .read(audioProvider.notifier)
-                        .moveClipToFolder(widget.clip, null);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text('${widget.clip.name}, ana klasöre taşındı'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 2),
+      builder: (context) => Dialog(
+        child: DefaultTabController(
+          length: 2,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Nereye Taşımak İstersiniz?',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
-                      );
-                    }
-                  },
+                      ),
+                      TabBar(
+                        indicatorColor: Colors.white,
+                        dividerColor: Colors.transparent,
+                        tabs: const [
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.folder_open, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text('Ana Klasör', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.folder, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text('Alt Klasörler', style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              const Divider(),
-              ...currentState.folders.map((folder) {
-                if (folder.id == currentFolderId) {
-                  return const SizedBox.shrink();
-                }
+                Flexible(
+                  child: TabBarView(
+                    children: [
+                      // Ana Klasör Sekmesi
+                      _buildMainFolderTab(context, ref),
 
-                return ListTile(
-                  leading: const Icon(Icons.folder),
-                  title: Text(folder.name),
-                  onTap: () async {
-                    await ref
-                        .read(audioProvider.notifier)
-                        .moveClipToFolder(widget.clip, folder.id);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text('${widget.clip.name}, ${folder.name} klasörüne taşındı'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                );
-              }).where((widget) => widget is ListTile),
-            ],
+                      // Alt Klasörler Sekmesi
+                      _buildSubFoldersTab(
+                        context,
+                        ref,
+                        currentState.folders,
+                        currentFolderId,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('İptal'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
+      ),
+    );
+  }
+
+  Widget _buildMainFolderTab(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.drive_folder_upload,
+            size: 64,
+            color: Colors.blue,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Ana Klasöre Taşı',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tüm kliplerinize ana klasörden kolayca erişebilirsiniz.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await ref
+                  .read(audioProvider.notifier)
+                  .moveClipToFolder(widget.clip, null);
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${widget.clip.name} ana klasöre taşındı'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text('Ana Klasöre Taşı'),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSubFoldersTab(
+    BuildContext context,
+    WidgetRef ref,
+    List<Folder> folders,
+    String? currentFolderId,
+  ) {
+    final filteredFolders =
+        folders.where((folder) => folder.id != currentFolderId).toList();
+
+    if (filteredFolders.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.folder_off, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                'Henüz klasör bulunmuyor',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Yeni bir klasör oluşturmak için ana sayfadaki + butonunu kullanabilirsiniz.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: filteredFolders.length,
+      itemBuilder: (context, index) {
+        final folder = filteredFolders[index];
+        return ListTile(
+          leading: const Icon(Icons.folder, color: Colors.blue),
+          title: Text(folder.name),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            await ref
+                .read(audioProvider.notifier)
+                .moveClipToFolder(widget.clip, folder.id);
+            if (context.mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      '${widget.clip.name}, ${folder.name} klasörüne taşındı'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+        );
+      },
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../shared/widgets/search_bar.dart';
 import '../providers/audio_provider.dart';
 import '../widgets/clip_list_item.dart';
 import '../widgets/folder_list_item.dart';
@@ -65,34 +66,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final audioState = ref.watch(audioProvider);
+  Widget _buildContent(BuildContext context, AudioState? state) {
+    if (state == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return audioState.when(
-      data: (state) => _buildContent(context, state),
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, _) => Scaffold(
-        body: Center(child: Text('Hata: $error')),
-      ),
-    );
-  }
-
-  Widget _buildContent(BuildContext context, AudioState state) {
     final currentFolder = state.currentFolderId != null
-        ? state.folders
-            .firstWhere((folder) => folder.id == state.currentFolderId)
+        ? state.folders.firstWhere(
+            (folder) => folder.id == state.currentFolderId,
+            orElse: () => Folder(id: '', name: ''),
+          )
         : null;
 
     return Scaffold(
       appBar: AppBar(
-        leading: currentFolder != null
+        leading: currentFolder != null && currentFolder.id.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () =>
-                    ref.read(audioProvider.notifier).setCurrentFolder(null),
+                onPressed: () {
+                  _searchController.clear();
+                  ref.read(audioProvider.notifier).setCurrentFolder(null);
+                },
               )
             : null,
         title: Text(currentFolder?.name ?? 'Ses Kliplerim'),
@@ -103,23 +97,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: TextField(
+              child: CustomSearchBar(
                 controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Ara...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onChanged: (value) =>
-                    ref.read(audioProvider.notifier).search(value),
               ),
             ),
           ),
 
           // Klasörler Başlığı ve Listesi
-          if (currentFolder == null && state.folders.isNotEmpty) ...[
+          if (currentFolder == null && state.filteredFolders.isNotEmpty) ...[
             const SliverPadding(
               padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
               sliver: SliverToBoxAdapter(
@@ -133,27 +118,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => FolderListItem(
-                    folder: state.folders[index],
-                    onTap: () => ref
-                        .read(audioProvider.notifier)
-                        .setCurrentFolder(state.folders[index].id),
-                    onRename: () => _renameFolder(state.folders[index]),
-                  ),
-                  childCount: state.folders.length,
+                  (context, index) {
+                    final folder = state.filteredFolders[index];
+                    if (folder.id.isEmpty) return const SizedBox.shrink();
+
+                    return FolderListItem(
+                      folder: folder,
+                      onTap: () {
+                        _searchController.clear();
+                        ref
+                            .read(audioProvider.notifier)
+                            .setCurrentFolder(folder.id);
+                      },
+                      onRename: () => _renameFolder(folder),
+                    );
+                  },
+                  childCount: state.filteredFolders.length,
                 ),
               ),
             ),
           ],
 
           // Klipler Başlığı
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          const SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
             sliver: SliverToBoxAdapter(
               child: Text(
                 'Klipler',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -172,6 +164,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ref.watch(audioProvider).when(
+          data: (state) => _buildContent(context, state),
+          loading: () => const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (error, _) => Scaffold(
+            body: Center(child: Text('Hata: $error')),
+          ),
+        );
   }
 
   Widget _buildClipsList(List<AudioClip> clips) {
