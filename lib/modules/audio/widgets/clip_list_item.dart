@@ -201,6 +201,9 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
     final currentState = ref.read(audioProvider).value;
     if (currentState == null) return;
 
+    // Mevcut klasör ID'sini al
+    final currentFolderId = widget.clip.folderId;
+
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -209,28 +212,40 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.folder_open),
-                title: const Text('Ana Klasör'),
-                onTap: () {
-                  ref
-                      .read(audioProvider.notifier)
-                      .moveClipToFolder(widget.clip, null);
-                  Navigator.pop(context);
-                },
-              ),
-              ...currentState.folders
-                  .where((folder) => folder.id != widget.clip.folderId)
-                  .map((folder) => ListTile(
-                    leading: const Icon(Icons.folder),
-                    title: Text(folder.name),
-                    onTap: () {
-                      ref
-                          .read(audioProvider.notifier)
-                          .moveClipToFolder(widget.clip, folder.id);
+              // Ana klasöre taşıma seçeneğini sadece klasör içindeki klipler için göster
+              if (currentFolderId != null)
+                ListTile(
+                  leading: const Icon(Icons.folder_open),
+                  title: const Text('Ana Klasör'),
+                  onTap: () async {
+                    await ref
+                        .read(audioProvider.notifier)
+                        .moveClipToFolder(widget.clip, null);
+                    if (context.mounted) {
                       Navigator.pop(context);
-                    },
-                  )),
+                    }
+                  },
+                ),
+              const Divider(),
+              ...currentState.folders.map((folder) {
+                // Klip zaten bu klasördeyse gösterme
+                if (folder.id == currentFolderId)
+                  return const SizedBox.shrink();
+
+                return ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: Text(folder.name),
+                  onTap: () async {
+                    await ref
+                        .read(audioProvider.notifier)
+                        .moveClipToFolder(widget.clip, folder.id);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                );
+              }).where((widget) => widget is ListTile),
+              // Sadece ListTile'ları filtrele
             ],
           ),
         ),

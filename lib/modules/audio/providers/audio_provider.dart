@@ -351,6 +351,10 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
   Future<void> moveClipToFolder(AudioClip clip, String? folderId) async {
     try {
       final currentState = state.value!;
+
+      // Eğer klip zaten hedef klasördeyse işlemi iptal et
+      if (clip.folderId == folderId) return;
+
       final updatedClips = currentState.clips.map((c) {
         if (c.id == clip.id) {
           return c.copyWith(folderId: folderId);
@@ -359,7 +363,13 @@ class AudioNotifier extends StateNotifier<AsyncValue<AudioState>> {
       }).toList();
 
       await _saveToPrefs(currentState.folders, updatedClips);
-      state = AsyncValue.data(currentState.copyWith(clips: updatedClips));
+
+      // Mevcut görünümü koru
+      state = AsyncValue.data(currentState.copyWith(
+        clips: updatedClips,
+        currentFolderId:
+            currentState.currentFolderId, // Mevcut klasör görünümünü koru
+      ));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
