@@ -219,7 +219,9 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
                   Navigator.pop(context);
                 },
               ),
-              ...currentState.folders.map((folder) => ListTile(
+              ...currentState.folders
+                  .where((folder) => folder.id != widget.clip.folderId)
+                  .map((folder) => ListTile(
                     leading: const Icon(Icons.folder),
                     title: Text(folder.name),
                     onTap: () {
