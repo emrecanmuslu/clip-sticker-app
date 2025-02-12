@@ -4,7 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import '../../../shared/providers/audio_player_provider.dart';
 import '../providers/audio_provider.dart';
 
-class ClipListItem extends ConsumerWidget {
+class ClipListItem extends ConsumerStatefulWidget {
   final AudioClip clip;
   final VoidCallback onShare;
 
@@ -14,6 +14,11 @@ class ClipListItem extends ConsumerWidget {
     required this.onShare,
   });
 
+  @override
+  ConsumerState<ClipListItem> createState() => _ClipListItemState();
+}
+
+class _ClipListItemState extends ConsumerState<ClipListItem> {
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     String minutes = twoDigits(duration.inMinutes.remainder(60));
@@ -22,103 +27,113 @@ class ClipListItem extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final player = ref.watch(audioPlayerProvider);
-    final currentPath = ref.watch(audioPlayerProvider.notifier).currentPath;
-    final isCurrentClip = currentPath == clip.path;
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: Consumer(
+          builder: (context, ref, child) {
+            return StreamBuilder<bool>(
+              stream: ref.watch(audioPlayerProvider.notifier).playingStream,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                final isCurrentClip =
+                    ref.watch(audioPlayerProvider.notifier).currentPath ==
+                        widget.clip.path;
 
-    return StreamBuilder<PlayerState>(
-      stream: player.playerStateStream,
-      builder: (context, snapshot) {
-        final playerState = snapshot.data;
-        final isPlaying = isCurrentClip && playerState?.playing == true;
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: ListTile(
-            leading: IconButton(
-              icon: Icon(
-                isPlaying ? Icons.pause_circle : Icons.play_circle,
-                color: Theme.of(context).primaryColor,
-                size: 32,
-              ),
-              onPressed: () {
-                ref.read(audioPlayerProvider.notifier).playClip(clip.path);
-              },
-            ),
-            title: Text(
-              clip.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              _formatDuration(Duration(seconds: clip.duration.toInt())),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.share),
-                  onPressed: onShare,
-                ),
-                PopupMenuButton<String>(
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'rename',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit),
-                          SizedBox(width: 8),
-                          Text('Yeniden Adlandır'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'move',
-                      child: Row(
-                        children: [
-                          Icon(Icons.folder),
-                          SizedBox(width: 8),
-                          Text('Taşı'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Sil', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                  onSelected: (value) async {
-                    switch (value) {
-                      case 'rename':
-                        await _showRenameDialog(context, ref);
-                        break;
-                      case 'move':
-                        await _showMoveDialog(context, ref);
-                        break;
-                      case 'delete':
-                        await _showDeleteDialog(context, ref);
-                        break;
+                return IconButton(
+                  icon: Icon(
+                    (isPlaying && isCurrentClip)
+                        ? Icons.pause_circle
+                        : Icons.play_circle,
+                    color: Theme.of(context).primaryColor,
+                    size: 32,
+                  ),
+                  onPressed: () {
+                    final audioPlayerNotifier =
+                        ref.read(audioPlayerProvider.notifier);
+                    if (isPlaying && isCurrentClip) {
+                      audioPlayerNotifier.pause();
+                    } else {
+                      audioPlayerNotifier.playClip(widget.clip.path);
                     }
                   },
+                );
+              },
+            );
+          },
+        ),
+        title: Text(
+          widget.clip.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          _formatDuration(Duration(seconds: widget.clip.duration.toInt())),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: widget.onShare,
+            ),
+            PopupMenuButton<String>(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'rename',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit),
+                      SizedBox(width: 8),
+                      Text('Yeniden Adlandır'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'move',
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder),
+                      SizedBox(width: 8),
+                      Text('Taşı'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Sil', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
                 ),
               ],
+              onSelected: (value) async {
+                switch (value) {
+                  case 'rename':
+                    await _showRenameDialog(context, ref);
+                    break;
+                  case 'move':
+                    await _showMoveDialog(context, ref);
+                    break;
+                  case 'delete':
+                    await _showDeleteDialog(context, ref);
+                    break;
+                }
+              },
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
   Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController(text: clip.name);
+    final controller = TextEditingController(text: widget.clip.name);
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -140,7 +155,7 @@ class ClipListItem extends ConsumerWidget {
               if (controller.text.isNotEmpty) {
                 ref
                     .read(audioProvider.notifier)
-                    .renameClip(clip, controller.text);
+                    .renameClip(widget.clip, controller.text);
               }
               Navigator.pop(context);
             },
@@ -167,7 +182,9 @@ class ClipListItem extends ConsumerWidget {
                 leading: const Icon(Icons.folder_open),
                 title: const Text('Ana Klasör'),
                 onTap: () {
-                  ref.read(audioProvider.notifier).moveClipToFolder(clip, null);
+                  ref
+                      .read(audioProvider.notifier)
+                      .moveClipToFolder(widget.clip, null);
                   Navigator.pop(context);
                 },
               ),
@@ -177,7 +194,7 @@ class ClipListItem extends ConsumerWidget {
                     onTap: () {
                       ref
                           .read(audioProvider.notifier)
-                          .moveClipToFolder(clip, folder.id);
+                          .moveClipToFolder(widget.clip, folder.id);
                       Navigator.pop(context);
                     },
                   )),
@@ -216,7 +233,7 @@ class ClipListItem extends ConsumerWidget {
     );
 
     if (confirm == true) {
-      await ref.read(audioProvider.notifier).deleteClip(clip);
+      await ref.read(audioProvider.notifier).deleteClip(widget.clip);
     }
   }
 }
