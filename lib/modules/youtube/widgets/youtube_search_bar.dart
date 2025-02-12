@@ -64,8 +64,10 @@ class _YoutubeSearchBarState extends ConsumerState<YoutubeSearchBar> {
                     : null,
               ),
               onChanged: (value) {
-                setState(() {}); // Sadece UI güncellemesi için
+                setState(() {}); // UI güncellemesi için
               },
+              onSubmitted: (_) => _handleSearch(),
+              // Enter tuşu için eklendi
               textInputAction: TextInputAction.search,
             ),
           ),
