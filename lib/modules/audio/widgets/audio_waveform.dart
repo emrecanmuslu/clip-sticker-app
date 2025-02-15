@@ -121,17 +121,43 @@ class _CustomWaveformState extends State<CustomWaveform> {
     widget.onSeek(start, end);
   }
 
+  StreamSubscription? _playbackSubscription;
+
   Future<void> _togglePlayPause() async {
     try {
-      setState(() => _isPlaying = !_isPlaying);
-
       if (_isPlaying) {
-        final seekPosition = (_startPosition * 1000).toInt();
-        await widget.playerController.seekTo(seekPosition);
-        await widget.playerController.startPlayer();
-      } else {
+        _playbackSubscription?.cancel();
         await widget.playerController.pausePlayer();
+        setState(() => _isPlaying = false);
+        return;
       }
+
+      setState(() => _isPlaying = true);
+      await widget.playerController.seekTo((_startPosition * 1000).toInt());
+      await widget.playerController.startPlayer();
+
+      _playbackSubscription?.cancel();
+      _playbackSubscription =
+          widget.playerController.onCurrentDurationChanged.listen((duration) {
+        final position = duration / 1000;
+        setState(() => _currentPosition = position);
+
+        final positionFixed = double.parse(position.toStringAsFixed(1));
+        final endPositionFixed = double.parse(_endPosition.toStringAsFixed(1));
+
+        print(
+            'positionFixed: $positionFixed, endPositionFixed: $endPositionFixed');
+
+        if (positionFixed >= endPositionFixed - 0.5) {
+          _playbackSubscription?.cancel();
+          widget.playerController.pausePlayer();
+          widget.playerController.seekTo((_startPosition * 1000).toInt());
+          setState(() {
+            _isPlaying = false;
+            _currentPosition = _startPosition;
+          });
+        }
+      });
     } catch (e) {
       print('Oynatma hatası: $e');
       setState(() => _isPlaying = false);
