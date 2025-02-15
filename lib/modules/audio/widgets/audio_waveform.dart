@@ -257,8 +257,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                     enableSeekGesture: false,
                                     waveformType: WaveformType.fitWidth,
                                     playerWaveStyle: PlayerWaveStyle(
-                                      fixedWaveColor: Colors.grey.shade300,
-                                      liveWaveColor: Colors.grey.shade300,
+                                      fixedWaveColor: Colors.blue.shade300,
+                                      liveWaveColor: Colors.blue.shade300,
                                       spacing: 4,
                                       backgroundColor: Colors.white,
                                       showTop: true,
@@ -310,12 +310,18 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                         }
                                       : null,
                                   child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .primaryColor
-                                          .withOpacity(_isPlaying ? 0.1 : 0.3),
+                                      decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.blue.withOpacity(
+                                            _isPlaying ? 0.05 : 0.2),
+                                        Colors.blue.withOpacity(
+                                            _isPlaying ? 0.15 : 0.4),
+                                      ],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
                                     ),
-                                  ),
+                                  )),
                                 ),
                               ),
                               if (!_isPlaying)
