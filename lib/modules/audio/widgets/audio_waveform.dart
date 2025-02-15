@@ -135,7 +135,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
         final availableWidth = constraints.maxWidth - (horizontalPadding * 2);
         final pixelsPerSecond = availableWidth / widget.duration;
         final zoomScale = _scaleFactor / defaultZoom;
-        final scaledWidth = availableWidth * zoomScale;
+        final scaledWidth = constraints.maxWidth * zoomScale;
 
         return Column(
           children: [
