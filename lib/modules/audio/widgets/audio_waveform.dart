@@ -158,10 +158,22 @@ class _CustomWaveformState extends State<CustomWaveform> {
                       width: (_endPosition - _startPosition) * pixelsPerSecond,
                       top: 0,
                       height: handleHeight,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color:
-                              Theme.of(context).primaryColor.withOpacity(0.1),
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          final delta = details.delta.dx / pixelsPerSecond;
+                          final newStart = _startPosition + delta;
+                          final newEnd = _endPosition + delta;
+
+                          // Sınırları kontrol et
+                          if (newStart >= 0 && newEnd <= widget.duration) {
+                            _updatePositions(newStart, newEnd);
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).primaryColor.withOpacity(0.1),
+                          ),
                         ),
                       ),
                     ),
