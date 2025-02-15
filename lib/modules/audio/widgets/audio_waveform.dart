@@ -1,293 +1,294 @@
 import 'package:flutter/material.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 
-enum _DragMode { none, startThumb, endThumb, range }
-
 class CustomWaveform extends StatefulWidget {
   final String audioPath;
   final double startTime;
   final double endTime;
   final double duration;
-  final Color waveColor;
-  final Color selectedColor;
-  final Color backgroundColor;
-  final double height;
-  final PlayerController playerController;
-  final Function(double, double) onSeek;
   final double maxDuration;
-  final PlayerWaveStyle? customWaveStyle;
+  final Function(double start, double end) onSeek;
 
   const CustomWaveform({
-    super.key,
+    Key? key,
     required this.audioPath,
     required this.startTime,
     required this.endTime,
     required this.duration,
-    required this.playerController,
-    required this.onSeek,
     required this.maxDuration,
-    this.waveColor = Colors.grey,
-    this.selectedColor = Colors.blue,
-    this.backgroundColor = Colors.transparent,
-    this.height = 100,
-    this.customWaveStyle,
-  });
+    required this.onSeek,
+  }) : super(key: key);
 
   @override
   State<CustomWaveform> createState() => _CustomWaveformState();
 }
 
 class _CustomWaveformState extends State<CustomWaveform> {
-  late PlayerWaveStyle _waveStyle;
-  _DragMode _currentDragMode = _DragMode.none;
-  Offset? _dragStartPosition;
-  double? _initialStartTime;
-  double? _initialEndTime;
+  static const double minDuration = 1.0;
+  static const double handleWidth = 24.0; // Genişliği artırdık
+  static const double horizontalPadding = 24.0; // Padding'i azalttık
+  static const double waveformHeight = 100.0;
+  static const double handleHeight = 100.0;
+
+  late PlayerController _playerController;
+  late double _startPosition;
+  late double _endPosition;
+  bool _isDraggingStart = false;
+  bool _isDraggingEnd = false;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeWaveStyle();
+    _initializePlayer();
+    _initializePositions();
   }
 
-  void _initializeWaveStyle() {
-    _waveStyle = widget.customWaveStyle ??
-        PlayerWaveStyle(
-          fixedWaveColor: widget.waveColor,
-          liveWaveColor: widget.selectedColor,
-          spacing: 4,
-          waveThickness: 2,
-          scaleFactor: 80,
-          waveCap: StrokeCap.round,
-        );
-  }
-
-  // Pozisyonu süreye çevirme
-  double _convertPositionToDuration(double position, Size size) {
-    return (position / size.width) * widget.duration;
-  }
-
-  // Sürekliliği kontrol etme
-  bool _isValidTimeRange(double start, double end) {
-    return start >= 0 &&
-        end <= widget.duration &&
-        end - start <= widget.maxDuration &&
-        end - start >= 1; // Minimum 1 saniye
-  }
-
-  // Sürüklenme modunu belirleme
-  _DragMode _determineDragMode(Offset localPosition, Size size) {
-    final startThumbPosition = widget.startTime / widget.duration * size.width;
-    final endThumbPosition = widget.endTime / widget.duration * size.width;
-
-    const thumbTouchWidth = 30.0; // Daha geniş dokunma alanı
-    final selectionAreaWidth = endThumbPosition - startThumbPosition;
-
-    // Start thumbun dokunma alanı
-    if ((localPosition.dx - startThumbPosition).abs() < thumbTouchWidth) {
-      return _DragMode.startThumb;
-    }
-
-    // End thumbun dokunma alanı
-    if ((localPosition.dx - endThumbPosition).abs() < thumbTouchWidth) {
-      return _DragMode.endThumb;
-    }
-
-    // Seçili alan içindeki alan
-    if (localPosition.dx >= startThumbPosition &&
-        localPosition.dx <= endThumbPosition) {
-      return _DragMode.range;
-    }
-
-    return _DragMode.none;
-  }
-
-  void _handleDragStart(DragStartDetails details) {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final localPosition = renderBox.globalToLocal(details.globalPosition);
-
-    _dragStartPosition = localPosition;
-    _initialStartTime = widget.startTime;
-    _initialEndTime = widget.endTime;
-    _currentDragMode = _determineDragMode(localPosition, renderBox.size);
-  }
-
-  void _handleDragUpdate(DragUpdateDetails details) {
-    if (_dragStartPosition == null) return;
-
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final dragDelta = _convertPositionToDuration(
-        details.localPosition.dx - _dragStartPosition!.dx, renderBox.size);
-
-    switch (_currentDragMode) {
-      case _DragMode.startThumb:
-        final newStartTime = (_initialStartTime ?? 0) + dragDelta;
-        final newEndTime = _initialEndTime ?? widget.duration;
-
-        if (_isValidTimeRange(newStartTime, newEndTime)) {
-          widget.onSeek(newStartTime, newEndTime);
-        }
-        break;
-
-      case _DragMode.endThumb:
-        final newStartTime = _initialStartTime ?? 0;
-        final newEndTime = (_initialEndTime ?? 0) + dragDelta;
-
-        if (_isValidTimeRange(newStartTime, newEndTime)) {
-          widget.onSeek(newStartTime, newEndTime);
-        }
-        break;
-
-      case _DragMode.range:
-        final newStartTime = (_initialStartTime ?? 0) + dragDelta;
-        final newEndTime = (_initialEndTime ?? 0) + dragDelta;
-
-        if (_isValidTimeRange(newStartTime, newEndTime)) {
-          widget.onSeek(newStartTime, newEndTime);
-        }
-        break;
-
-      case _DragMode.none:
-        break;
+  Future<void> _initializePlayer() async {
+    _playerController = PlayerController();
+    try {
+      await _playerController.preparePlayer(
+        path: widget.audioPath,
+        shouldExtractWaveform: true,
+        noOfSamples: 150, // Örnek sayısını artırdık
+      );
+      setState(() => _isInitialized = true);
+    } catch (e) {
+      debugPrint('Ses yükleme hatası: $e');
     }
   }
 
-  void _handleDragEnd(DragEndDetails details) {
-    _currentDragMode = _DragMode.none;
-    _dragStartPosition = null;
-    _initialStartTime = null;
-    _initialEndTime = null;
+  @override
+  void dispose() {
+    _playerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(CustomWaveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.startTime != widget.startTime ||
+        oldWidget.endTime != widget.endTime) {
+      _initializePositions();
+    }
+  }
+
+  void _initializePositions() {
+    _startPosition = widget.startTime;
+    _endPosition = widget.endTime;
+  }
+
+  double _normalizePosition(double position) {
+    return position.clamp(0.0, widget.duration);
+  }
+
+  void _updatePositions(double start, double end) {
+    if (end - start < minDuration) {
+      if (_isDraggingStart) {
+        start = end - minDuration;
+      } else if (_isDraggingEnd) {
+        end = start + minDuration;
+      }
+    }
+
+    if (end - start > widget.maxDuration) {
+      if (_isDraggingStart) {
+        start = end - widget.maxDuration;
+      } else if (_isDraggingEnd) {
+        end = start + widget.maxDuration;
+      }
+    }
+
+    start = _normalizePosition(start);
+    end = _normalizePosition(end);
+
+    setState(() {
+      _startPosition = start;
+      _endPosition = end;
+    });
+
+    widget.onSeek(start, end);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragStart: _handleDragStart,
-      onHorizontalDragUpdate: _handleDragUpdate,
-      onHorizontalDragEnd: _handleDragEnd,
-      child: Container(
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: widget.backgroundColor,
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Stack(
-          children: [
-            // Dalga formu
-            AudioFileWaveforms(
-              size: Size(MediaQuery.of(context).size.width, widget.height),
-              playerController: widget.playerController,
-              waveformType: WaveformType.fitWidth,
-              playerWaveStyle: _waveStyle,
-              backgroundColor: widget.backgroundColor,
-              enableSeekGesture: false,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth - (horizontalPadding * 2);
+        final pixelsPerSecond = availableWidth / widget.duration;
 
-            // Seçim göstergeleri
-            IgnorePointer(
-              child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, widget.height),
-                painter: RangeIndicatorPainter(
-                  startPosition: widget.startTime / widget.duration,
-                  endPosition: widget.endTime / widget.duration,
-                  color: widget.selectedColor,
+        return Container(
+          height: 100,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: !_isInitialized
+              ? const Center(child: CircularProgressIndicator())
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Dalga formu
+                    Positioned.fill(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: horizontalPadding),
+                        child: AudioFileWaveforms(
+                          size: Size(availableWidth, waveformHeight),
+                          playerController: _playerController,
+                          enableSeekGesture: false,
+                          waveformType: WaveformType.fitWidth,
+                          playerWaveStyle: PlayerWaveStyle(
+                            fixedWaveColor: Colors.grey.shade300,
+                            liveWaveColor: Theme.of(context).primaryColor,
+                            spacing: 4,
+                            backgroundColor: Colors.white,
+                            showTop: true,
+                            showBottom: true,
+                            showSeekLine: false,
+                            scaleFactor: 280.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Seçili alan overlay
+                    Positioned(
+                      left: horizontalPadding +
+                          (_startPosition * pixelsPerSecond),
+                      width: (_endPosition - _startPosition) * pixelsPerSecond,
+                      top: 0,
+                      height: handleHeight,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).primaryColor.withOpacity(0.1),
+                        ),
+                      ),
+                    ),
+                    // Sol tutamaç
+                    _buildPositionHandle(
+                      context: context,
+                      position: _startPosition,
+                      pixelsPerSecond: pixelsPerSecond,
+                      isStart: true,
+                      onDragStart: () => _isDraggingStart = true,
+                      onDragUpdate: (details) {
+                        final RenderBox box =
+                            context.findRenderObject() as RenderBox;
+                        final localPosition =
+                            box.globalToLocal(details.globalPosition);
+                        final newStart =
+                            (localPosition.dx - horizontalPadding) /
+                                pixelsPerSecond;
+                        _updatePositions(newStart, _endPosition);
+                      },
+                      onDragEnd: () => _isDraggingStart = false,
+                    ),
+                    // Sağ tutamaç
+                    _buildPositionHandle(
+                      context: context,
+                      position: _endPosition,
+                      pixelsPerSecond: pixelsPerSecond,
+                      isStart: false,
+                      onDragStart: () => _isDraggingEnd = true,
+                      onDragUpdate: (details) {
+                        final RenderBox box =
+                            context.findRenderObject() as RenderBox;
+                        final localPosition =
+                            box.globalToLocal(details.globalPosition);
+                        final newEnd = (localPosition.dx - horizontalPadding) /
+                            pixelsPerSecond;
+                        _updatePositions(_startPosition, newEnd);
+                      },
+                      onDragEnd: () => _isDraggingEnd = false,
+                    ),
+                    // Süre göstergeleri
+                    Positioned(
+                      top: -20,
+                      left: horizontalPadding,
+                      right: horizontalPadding,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDuration(_startPosition),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          Text(
+                            _formatDuration(_endPosition),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPositionHandle({
+    required BuildContext context,
+    required double position,
+    required double pixelsPerSecond,
+    required bool isStart,
+    required VoidCallback onDragStart,
+    required Function(DragUpdateDetails) onDragUpdate,
+    required VoidCallback onDragEnd,
+  }) {
+    return Positioned(
+      left:
+          horizontalPadding + (position * pixelsPerSecond) - (handleWidth / 2),
+      top: 0,
+      child: GestureDetector(
+        onHorizontalDragStart: (_) => onDragStart(),
+        onHorizontalDragUpdate: onDragUpdate,
+        onHorizontalDragEnd: (_) => onDragEnd(),
+        child: SizedBox(
+          width: handleWidth,
+          height: handleHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 2,
+                height: handleHeight,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  borderRadius: BorderRadius.circular(1),
                 ),
               ),
-            ),
-
-            // Thumb'lar
-            Positioned(
-              left: (widget.startTime / widget.duration) *
-                      MediaQuery.of(context).size.width -
-                  10,
-              top: 0,
-              bottom: 0,
-              child: _buildThumb(),
-            ),
-            Positioned(
-              left: (widget.endTime / widget.duration) *
-                      MediaQuery.of(context).size.width -
-                  10,
-              top: 0,
-              bottom: 0,
-              child: _buildThumb(),
-            ),
-          ],
+              Positioned(
+                bottom: 0,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildThumb() {
-    return Container(
-      width: 20,
-      decoration: BoxDecoration(
-        color: widget.selectedColor,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class RangeIndicatorPainter extends CustomPainter {
-  final double startPosition;
-  final double endPosition;
-  final Color color;
-
-  const RangeIndicatorPainter({
-    required this.startPosition,
-    required this.endPosition,
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final startX = size.width * startPosition;
-    final endX = size.width * endPosition;
-
-    // Start çizgisi
-    canvas.drawLine(
-      Offset(startX, 0),
-      Offset(startX, size.height),
-      paint,
-    );
-
-    // End çizgisi
-    canvas.drawLine(
-      Offset(endX, 0),
-      Offset(endX, size.height),
-      paint,
-    );
-
-    // Seçili alan
-    final selectedAreaPaint = Paint()
-      ..color = color.withOpacity(0.2)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRect(
-      Rect.fromLTRB(startX, 0, endX, size.height),
-      selectedAreaPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(RangeIndicatorPainter oldDelegate) {
-    return startPosition != oldDelegate.startPosition ||
-        endPosition != oldDelegate.endPosition ||
-        color != oldDelegate.color;
+  String _formatDuration(double seconds) {
+    Duration duration = Duration(milliseconds: (seconds * 1000).round());
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$twoDigitMinutes:$twoDigitSeconds";
   }
 }

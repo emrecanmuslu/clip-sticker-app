@@ -15,7 +15,7 @@ class ClipEditorState {
   final bool isLoading;
   final String? error;
 
-  static const double maxDuration = 15.0; // 15 saniye
+  static const double maxDuration = 40.0; // 15 saniye
 
   ClipEditorState({
     this.startTime = 0.0,

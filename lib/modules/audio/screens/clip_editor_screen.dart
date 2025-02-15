@@ -173,7 +173,6 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
                     startTime: editorState.startTime,
                     endTime: editorState.endTime,
                     duration: editorState.duration,
-                    playerController: _playerController,
                     maxDuration: ClipEditorState.maxDuration,
                     onSeek: (start, end) {
                       ref
