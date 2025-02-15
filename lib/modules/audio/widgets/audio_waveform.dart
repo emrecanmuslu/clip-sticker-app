@@ -373,54 +373,63 @@ class _CustomWaveformState extends State<CustomWaveform> {
                     ),
             ),
 
-            // 4. Zoom Kontrolleri
+            // Kontrol Paneli
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.zoom_out),
-                    onPressed: fixZoomScale != '1.0' ? _handleZoomOut : null,
-                    tooltip: 'Uzaklaş',
-                    color: _scaleFactor > minZoom ? null : Colors.grey,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Play/Pause Butonu
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'Zoom: ${fixZoomScale}x',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  child: IconButton(
+                    iconSize: 32,
+                    icon: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
                     ),
+                    onPressed: _togglePlayPause,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.zoom_in),
-                    onPressed: fixZoomScale != '2.9' ? _handleZoomIn : null,
-                    tooltip: 'Yakınlaş',
-                  ),
-                ],
-              ),
-            ),
-
-            // 5. Play/Pause Butonu
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                iconSize: 32,
-                icon: Icon(
-                  _isPlaying ? Icons.pause : Icons.play_arrow,
-                  color: Colors.white,
                 ),
-                onPressed: _togglePlayPause,
-              ),
+
+                const SizedBox(width: 16),
+
+                // Zoom Kontrolleri
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.zoom_out),
+                        onPressed:
+                            fixZoomScale != '1.0' ? _handleZoomOut : null,
+                        tooltip: 'Uzaklaş',
+                        color: _scaleFactor > minZoom ? null : Colors.grey,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'Zoom: ${fixZoomScale}x',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.zoom_in),
+                        onPressed: fixZoomScale != '2.9' ? _handleZoomIn : null,
+                        tooltip: 'Yakınlaş',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         );
