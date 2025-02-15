@@ -63,7 +63,8 @@ class _ClipListItemState extends ConsumerState<ClipListItem> {
                     ),
                     title: Text(
                       widget.clip.name,
-                      maxLines: 1,
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.bodyMedium,
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
