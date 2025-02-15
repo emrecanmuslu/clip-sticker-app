@@ -163,6 +163,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onPressed: () => _showAddMenu(),
         child: const Icon(Icons.add),
       ),
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        height: 30,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
