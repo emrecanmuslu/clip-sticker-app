@@ -113,11 +113,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
     start = _normalizePosition(start);
     end = _normalizePosition(end);
 
-    // Seçim değiştiğinde oynatmayı duraklat
-    if (_isPlaying) {
-      _togglePlayPause();
-    }
-
     setState(() {
       _startPosition = start;
       _endPosition = end;
@@ -277,64 +272,77 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                 top: 0,
                                 height: handleHeight,
                                 child: GestureDetector(
-                                  onHorizontalDragUpdate: (details) {
-                                    final delta = details.delta.dx /
-                                        (pixelsPerSecond * zoomScale);
-                                    final newStart = _startPosition + delta;
-                                    final newEnd = _endPosition + delta;
+                                  onHorizontalDragUpdate: !_isPlaying
+                                      ? (details) {
+                                          final delta = details.delta.dx /
+                                              (pixelsPerSecond * zoomScale);
+                                          final newStart =
+                                              _startPosition + delta;
+                                          final newEnd = _endPosition + delta;
 
-                                    if (newStart >= 0 &&
-                                        newEnd <= widget.duration) {
-                                      _updatePositions(newStart, newEnd);
-                                    }
-                                  },
+                                          if (newStart >= 0 &&
+                                              newEnd <= widget.duration) {
+                                            _updatePositions(newStart, newEnd);
+                                          }
+                                        }
+                                      : null,
                                   child: Container(
                                     decoration: BoxDecoration(
                                       color: Theme.of(context)
                                           .primaryColor
-                                          .withOpacity(0.1),
+                                          .withOpacity(_isPlaying ? 0.1 : 0.3),
                                     ),
                                   ),
                                 ),
                               ),
-                              _buildPositionHandle(
-                                context: context,
-                                position: _startPosition,
-                                pixelsPerSecond: pixelsPerSecond,
-                                zoomScale: zoomScale,
-                                isStart: true,
-                                onDragStart: () => _isDraggingStart = true,
-                                onDragUpdate: (details) {
-                                  final RenderBox box =
-                                      context.findRenderObject() as RenderBox;
-                                  final localPosition =
-                                      box.globalToLocal(details.globalPosition);
-                                  final newStart =
-                                      (localPosition.dx - horizontalPadding) /
-                                          (pixelsPerSecond * zoomScale);
-                                  _updatePositions(newStart, _endPosition);
-                                },
-                                onDragEnd: () => _isDraggingStart = false,
-                              ),
-                              _buildPositionHandle(
-                                context: context,
-                                position: _endPosition,
-                                pixelsPerSecond: pixelsPerSecond,
-                                zoomScale: zoomScale,
-                                isStart: false,
-                                onDragStart: () => _isDraggingEnd = true,
-                                onDragUpdate: (details) {
-                                  final RenderBox box =
-                                      context.findRenderObject() as RenderBox;
-                                  final localPosition =
-                                      box.globalToLocal(details.globalPosition);
-                                  final newEnd =
-                                      (localPosition.dx - horizontalPadding) /
-                                          (pixelsPerSecond * zoomScale);
-                                  _updatePositions(_startPosition, newEnd);
-                                },
-                                onDragEnd: () => _isDraggingEnd = false,
-                              ),
+                              if (!_isPlaying)
+                                _buildPositionHandle(
+                                  context: context,
+                                  position: _startPosition,
+                                  pixelsPerSecond: pixelsPerSecond,
+                                  zoomScale: zoomScale,
+                                  isStart: true,
+                                  onDragStart: () => _isDraggingStart = true,
+                                  onDragUpdate: (details, isStart) {
+                                    final RenderBox box =
+                                        context.findRenderObject() as RenderBox;
+                                    final localPosition = box
+                                        .globalToLocal(details.globalPosition);
+                                    final newStart =
+                                        (localPosition.dx - horizontalPadding) /
+                                            (pixelsPerSecond * zoomScale);
+
+                                    if (newStart >= 0 &&
+                                        newStart < _endPosition) {
+                                      _updatePositions(newStart, _endPosition);
+                                    }
+                                  },
+                                  onDragEnd: () => _isDraggingStart = false,
+                                ),
+                              if (!_isPlaying)
+                                _buildPositionHandle(
+                                  context: context,
+                                  position: _endPosition,
+                                  pixelsPerSecond: pixelsPerSecond,
+                                  zoomScale: zoomScale,
+                                  isStart: false,
+                                  onDragStart: () => _isDraggingEnd = true,
+                                  onDragUpdate: (details, isStart) {
+                                    final RenderBox box =
+                                        context.findRenderObject() as RenderBox;
+                                    final localPosition = box
+                                        .globalToLocal(details.globalPosition);
+                                    final newEnd =
+                                        (localPosition.dx - horizontalPadding) /
+                                            (pixelsPerSecond * zoomScale);
+
+                                    if (newEnd <= widget.duration &&
+                                        newEnd > _startPosition) {
+                                      _updatePositions(_startPosition, newEnd);
+                                    }
+                                  },
+                                  onDragEnd: () => _isDraggingEnd = false,
+                                ),
                             ],
                           ),
                         ),
@@ -404,7 +412,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
     required double zoomScale,
     required bool isStart,
     required VoidCallback onDragStart,
-    required Function(DragUpdateDetails) onDragUpdate,
+    required Function(DragUpdateDetails, bool isStart) onDragUpdate,
     required VoidCallback onDragEnd,
   }) {
     return Positioned(
@@ -414,7 +422,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
       top: 0,
       child: GestureDetector(
         onHorizontalDragStart: (_) => onDragStart(),
-        onHorizontalDragUpdate: onDragUpdate,
+        onHorizontalDragUpdate: (details) => onDragUpdate(details, isStart),
         onHorizontalDragEnd: (_) => onDragEnd(),
         child: SizedBox(
           width: handleWidth,
