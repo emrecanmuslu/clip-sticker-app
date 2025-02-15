@@ -26,10 +26,10 @@ class CustomWaveform extends StatefulWidget {
 class _CustomWaveformState extends State<CustomWaveform> {
   static const double minDuration = 1.0;
   static const double handleWidth = 24.0;
-  static const double horizontalPadding = 24.0;
+  static const double horizontalPadding = 16.0; // Biraz daha dar
   static const double waveformHeight = 100.0;
   static const double handleHeight = 100.0;
-  static const double minZoom = 100.0;
+  static const double minZoom = 1.0;
   static const double maxZoom = 800.0;
   static const double defaultZoom = 280.0;
 
@@ -162,6 +162,30 @@ class _CustomWaveformState extends State<CustomWaveform> {
                 ],
               ),
             ),
+            // Süre göstergeleri (zoom durumundan bağımsız)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(_startPosition),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  Text(
+                    _formatDuration(_endPosition),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8), // Küçük bir boşluk
             Container(
               height: waveformHeight,
               decoration: BoxDecoration(
@@ -170,137 +194,134 @@ class _CustomWaveformState extends State<CustomWaveform> {
               ),
               child: !_isInitialized
                   ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      controller: _scrollController,
-                      scrollDirection: Axis.horizontal,
-                      child: SizedBox(
-                        width: scaledWidth,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            // Dalga formu
-                            Positioned.fill(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: horizontalPadding),
-                                child: AudioFileWaveforms(
-                                  size: Size(scaledWidth, waveformHeight),
-                                  playerController: _playerController,
-                                  enableSeekGesture: false,
-                                  waveformType: WaveformType.fitWidth,
-                                  playerWaveStyle: PlayerWaveStyle(
-                                    fixedWaveColor: Colors.grey.shade300,
-                                    liveWaveColor:
-                                        Theme.of(context).primaryColor,
-                                    spacing: 4,
-                                    backgroundColor: Colors.white,
-                                    showTop: true,
-                                    showBottom: true,
-                                    showSeekLine: false,
-                                    scaleFactor: _scaleFactor,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // Seçili alan
-                            Positioned(
-                              left: horizontalPadding +
-                                  (_startPosition *
-                                      pixelsPerSecond *
-                                      zoomScale),
-                              width: (_endPosition - _startPosition) *
-                                  pixelsPerSecond *
-                                  zoomScale,
-                              top: 0,
-                              height: handleHeight,
-                              child: GestureDetector(
-                                onHorizontalDragUpdate: (details) {
-                                  final delta = details.delta.dx /
-                                      (pixelsPerSecond * zoomScale);
-                                  final newStart = _startPosition + delta;
-                                  final newEnd = _endPosition + delta;
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: (ScrollNotification notification) {
+                        if (notification is ScrollUpdateNotification) {
+                          final delta = notification.scrollDelta ?? 0;
 
-                                  if (newStart >= 0 &&
-                                      newEnd <= widget.duration) {
-                                    _updatePositions(newStart, newEnd);
-                                  }
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .primaryColor
-                                        .withOpacity(0.1),
+                          // Scroll delta'sını zoom oranına göre normalize et
+                          final scrollDeltaInSeconds =
+                              delta / (pixelsPerSecond * zoomScale);
+
+                          final newStart =
+                              _startPosition + scrollDeltaInSeconds;
+                          final newEnd = _endPosition + scrollDeltaInSeconds;
+
+                          if (newStart >= 0 && newEnd <= widget.duration) {
+                            setState(() {
+                              _startPosition = newStart;
+                              _endPosition = newEnd;
+                            });
+                          }
+                        }
+                        return true;
+                      },
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: scaledWidth,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              // Dalga formu
+                              Positioned.fill(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: horizontalPadding),
+                                  child: AudioFileWaveforms(
+                                    size: Size(scaledWidth, waveformHeight),
+                                    playerController: _playerController,
+                                    enableSeekGesture: false,
+                                    waveformType: WaveformType.fitWidth,
+                                    playerWaveStyle: PlayerWaveStyle(
+                                      fixedWaveColor: Colors.grey.shade300,
+                                      liveWaveColor:
+                                          Theme.of(context).primaryColor,
+                                      spacing: 4,
+                                      backgroundColor: Colors.white,
+                                      showTop: true,
+                                      showBottom: true,
+                                      showSeekLine: false,
+                                      scaleFactor: _scaleFactor,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            // Sol tutamaç
-                            _buildPositionHandle(
-                              context: context,
-                              position: _startPosition,
-                              pixelsPerSecond: pixelsPerSecond,
-                              zoomScale: zoomScale,
-                              isStart: true,
-                              onDragStart: () => _isDraggingStart = true,
-                              onDragUpdate: (details) {
-                                final RenderBox box =
-                                    context.findRenderObject() as RenderBox;
-                                final localPosition =
-                                    box.globalToLocal(details.globalPosition);
-                                final newStart =
-                                    (localPosition.dx - horizontalPadding) /
+                              // Seçili alan
+                              Positioned(
+                                left: horizontalPadding +
+                                    (_startPosition *
+                                        pixelsPerSecond *
+                                        zoomScale),
+                                width: (_endPosition - _startPosition) *
+                                    pixelsPerSecond *
+                                    zoomScale,
+                                top: 0,
+                                height: handleHeight,
+                                child: GestureDetector(
+                                  onHorizontalDragUpdate: (details) {
+                                    final delta = details.delta.dx /
                                         (pixelsPerSecond * zoomScale);
-                                _updatePositions(newStart, _endPosition);
-                              },
-                              onDragEnd: () => _isDraggingStart = false,
-                            ),
-                            // Sağ tutamaç
-                            _buildPositionHandle(
-                              context: context,
-                              position: _endPosition,
-                              pixelsPerSecond: pixelsPerSecond,
-                              zoomScale: zoomScale,
-                              isStart: false,
-                              onDragStart: () => _isDraggingEnd = true,
-                              onDragUpdate: (details) {
-                                final RenderBox box =
-                                    context.findRenderObject() as RenderBox;
-                                final localPosition =
-                                    box.globalToLocal(details.globalPosition);
-                                final newEnd =
-                                    (localPosition.dx - horizontalPadding) /
-                                        (pixelsPerSecond * zoomScale);
-                                _updatePositions(_startPosition, newEnd);
-                              },
-                              onDragEnd: () => _isDraggingEnd = false,
-                            ),
-                            // Süre göstergeleri
-                            Positioned(
-                              top: -20,
-                              left: horizontalPadding,
-                              right: horizontalPadding,
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    _formatDuration(_startPosition),
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black54,
+                                    final newStart = _startPosition + delta;
+                                    final newEnd = _endPosition + delta;
+
+                                    if (newStart >= 0 &&
+                                        newEnd <= widget.duration) {
+                                      _updatePositions(newStart, newEnd);
+                                    }
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .primaryColor
+                                          .withOpacity(0.1),
                                     ),
                                   ),
-                                  Text(
-                                    _formatDuration(_endPosition),
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black54,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
+                              // Sol tutamaç
+                              _buildPositionHandle(
+                                context: context,
+                                position: _startPosition,
+                                pixelsPerSecond: pixelsPerSecond,
+                                zoomScale: zoomScale,
+                                isStart: true,
+                                onDragStart: () => _isDraggingStart = true,
+                                onDragUpdate: (details) {
+                                  final RenderBox box =
+                                      context.findRenderObject() as RenderBox;
+                                  final localPosition =
+                                      box.globalToLocal(details.globalPosition);
+                                  final newStart =
+                                      (localPosition.dx - horizontalPadding) /
+                                          (pixelsPerSecond * zoomScale);
+                                  _updatePositions(newStart, _endPosition);
+                                },
+                                onDragEnd: () => _isDraggingStart = false,
+                              ),
+                              // Sağ tutamaç
+                              _buildPositionHandle(
+                                context: context,
+                                position: _endPosition,
+                                pixelsPerSecond: pixelsPerSecond,
+                                zoomScale: zoomScale,
+                                isStart: false,
+                                onDragStart: () => _isDraggingEnd = true,
+                                onDragUpdate: (details) {
+                                  final RenderBox box =
+                                      context.findRenderObject() as RenderBox;
+                                  final localPosition =
+                                      box.globalToLocal(details.globalPosition);
+                                  final newEnd =
+                                      (localPosition.dx - horizontalPadding) /
+                                          (pixelsPerSecond * zoomScale);
+                                  _updatePositions(_startPosition, newEnd);
+                                },
+                                onDragEnd: () => _isDraggingEnd = false,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
