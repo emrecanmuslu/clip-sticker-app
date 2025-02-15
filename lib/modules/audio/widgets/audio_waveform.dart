@@ -24,9 +24,9 @@ class CustomWaveform extends StatefulWidget {
 }
 
 class _CustomWaveformState extends State<CustomWaveform> {
-  static const double minDuration = 1.0;
+  static const double minDuration = 5.0;
   static const double handleWidth = 24.0;
-  static const double horizontalPadding = 16.0; // Biraz daha dar
+  static const double horizontalPadding = 16.0;
   static const double waveformHeight = 100.0;
   static const double handleHeight = 100.0;
   static const double minZoom = 1.0;
