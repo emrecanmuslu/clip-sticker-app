@@ -145,9 +145,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
         final positionFixed = double.parse(position.toStringAsFixed(1));
         final endPositionFixed = double.parse(_endPosition.toStringAsFixed(1));
 
-        print(
-            'positionFixed: $positionFixed, endPositionFixed: $endPositionFixed');
-
         if (positionFixed >= endPositionFixed - 0.5) {
           _playbackSubscription?.cancel();
           widget.playerController.pausePlayer();
