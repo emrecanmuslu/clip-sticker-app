@@ -24,7 +24,6 @@ class ClipEditorScreen extends ConsumerStatefulWidget {
 class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
   final TextEditingController _nameController = TextEditingController();
   late PlayerController _playerController;
-  bool _isPlaying = false;
   bool _isInitialized = false;
   StreamSubscription? _playerSubscription;
 
@@ -64,8 +63,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         final editorState = ref.read(clipEditorProvider);
 
         if (currentPosition >= editorState.endTime) {
-          _togglePlayPause();
           _playerController.seekTo((editorState.startTime * 1000).toInt());
+          _playerController.pausePlayer();
         }
       });
 
@@ -76,25 +75,6 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
           SnackBar(content: Text('Ses dosyası yüklenemedi: $e')),
         );
       }
-    }
-  }
-
-  Future<void> _togglePlayPause() async {
-    try {
-      final editorState = ref.read(clipEditorProvider);
-
-      setState(() => _isPlaying = !_isPlaying);
-
-      if (_isPlaying) {
-        final seekPosition = (editorState.startTime * 1000).toInt();
-        await _playerController.seekTo(seekPosition);
-        await _playerController.startPlayer();
-      } else {
-        await _playerController.pausePlayer();
-      }
-    } catch (e) {
-      print('Oynatma hatası: $e');
-      setState(() => _isPlaying = false);
     }
   }
 
@@ -141,9 +121,7 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        if (_isPlaying) {
-          await _playerController.pausePlayer();
-        }
+        await _playerController.pausePlayer();
         return true;
       },
       child: Scaffold(
@@ -156,101 +134,105 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
         ),
         body: editorState.isLoading || !_isInitialized
             ? const Center(child: CircularProgressIndicator())
-            : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Klip İsmi',
-                        border: OutlineInputBorder(),
-                        hintText: 'Klip için özel bir isim girin',
-                      ),
-                      onChanged: (value) {
-                        final sanitizedName = value.trim();
-                        _nameController.text = sanitizedName;
-                        _nameController.selection = TextSelection.fromPosition(
-                          TextPosition(offset: sanitizedName.length),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Seçilen: ${_formatDuration(editorState.selectedDuration)} / '
-                      'Maksimum: ${_formatDuration(ClipEditorState.maxDuration)}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child: CustomWaveform(
-                        audioPath: widget.audioPath,
-                        startTime: editorState.startTime,
-                        endTime: editorState.endTime,
-                        duration: editorState.duration,
-                        maxDuration: ClipEditorState.maxDuration,
-                        playerController: _playerController,
-                        isPlaying: _isPlaying,
-                        onPlayPause: _togglePlayPause,
-                        onSeek: (start, end) {
-                          ref
-                              .read(clipEditorProvider.notifier)
-                              .updateTimeRange(start, end);
+            : SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Klip İsmi
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Klip İsmi',
+                          border: OutlineInputBorder(),
+                          hintText: 'Klip için özel bir isim girin',
+                        ),
+                        onChanged: (value) {
+                          final sanitizedName = value.trim();
+                          _nameController.text = sanitizedName;
+                          _nameController.selection =
+                              TextSelection.fromPosition(
+                            TextPosition(offset: sanitizedName.length),
+                          );
                         },
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          iconSize: 64,
-                          icon: Icon(
-                            _isPlaying ? Icons.pause_circle : Icons.play_circle,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                          onPressed: _togglePlayPause,
+                      const SizedBox(height: 24),
+
+                      // 2. Süre Bilgisi
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: editorState.isSaving ? null : _saveClip,
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: editorState.isSaving
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text(
-                                'KAYDET',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
-                    ),
-                    if (editorState.error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
                         child: Text(
-                          editorState.error!,
-                          style: const TextStyle(color: Colors.red),
+                          'Seçilen: ${_formatDuration(editorState.selectedDuration)} / '
+                          'Maksimum: ${_formatDuration(ClipEditorState.maxDuration)}',
                           textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                  ],
+                      const SizedBox(height: 24),
+
+                      // 3. Ses Dalgası
+                      Container(
+                        height: 280,
+                        child: CustomWaveform(
+                          audioPath: widget.audioPath,
+                          startTime: editorState.startTime,
+                          endTime: editorState.endTime,
+                          duration: editorState.duration,
+                          maxDuration: ClipEditorState.maxDuration,
+                          playerController: _playerController,
+                          onSeek: (start, end) {
+                            ref
+                                .read(clipEditorProvider.notifier)
+                                .updateTimeRange(start, end);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // 4. Kaydet Butonu
+                      SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: editorState.isSaving ? null : _saveClip,
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: editorState.isSaving
+                              ? const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text(
+                                  'KAYDET',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      if (editorState.error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Text(
+                            editorState.error!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
       ),

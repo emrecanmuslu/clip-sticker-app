@@ -10,8 +10,6 @@ class CustomWaveform extends StatefulWidget {
   final double maxDuration;
   final Function(double start, double end) onSeek;
   final PlayerController playerController;
-  final bool isPlaying;
-  final Function() onPlayPause;
 
   const CustomWaveform({
     Key? key,
@@ -22,8 +20,6 @@ class CustomWaveform extends StatefulWidget {
     required this.maxDuration,
     required this.onSeek,
     required this.playerController,
-    required this.isPlaying,
-    required this.onPlayPause,
   }) : super(key: key);
 
   @override
@@ -45,6 +41,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
   bool _isDraggingStart = false;
   bool _isDraggingEnd = false;
   bool _isInitialized = false;
+  bool _isPlaying = false;
   double _scaleFactor = defaultZoom;
   final ScrollController _scrollController = ScrollController();
   StreamSubscription? _positionSubscription;
@@ -69,6 +66,9 @@ class _CustomWaveformState extends State<CustomWaveform> {
 
   @override
   void dispose() {
+    if (_isPlaying) {
+      widget.playerController.pausePlayer();
+    }
     _positionSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -114,8 +114,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
     end = _normalizePosition(end);
 
     // Seçim değiştiğinde oynatmayı duraklat
-    if (widget.isPlaying) {
-      widget.onPlayPause();
+    if (_isPlaying) {
+      _togglePlayPause();
     }
 
     setState(() {
@@ -124,6 +124,23 @@ class _CustomWaveformState extends State<CustomWaveform> {
     });
 
     widget.onSeek(start, end);
+  }
+
+  Future<void> _togglePlayPause() async {
+    try {
+      setState(() => _isPlaying = !_isPlaying);
+
+      if (_isPlaying) {
+        final seekPosition = (_startPosition * 1000).toInt();
+        await widget.playerController.seekTo(seekPosition);
+        await widget.playerController.startPlayer();
+      } else {
+        await widget.playerController.pausePlayer();
+      }
+    } catch (e) {
+      print('Oynatma hatası: $e');
+      setState(() => _isPlaying = false);
+    }
   }
 
   void _handleZoomIn() {
@@ -150,29 +167,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
 
         return Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.zoom_out),
-                    onPressed: fixZoomScale != '1.0' ? _handleZoomOut : null,
-                    tooltip: 'Uzaklaş',
-                    color: _scaleFactor > minZoom ? null : Colors.grey,
-                  ),
-                  Text(
-                    'Zoom: ${fixZoomScale}x',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.zoom_in),
-                    onPressed: fixZoomScale != '2.9' ? _handleZoomIn : null,
-                    tooltip: 'Yakınlaş',
-                  ),
-                ],
-              ),
-            ),
+            // 1. Zaman Göstergesi
             Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: Row(
@@ -182,10 +177,11 @@ class _CustomWaveformState extends State<CustomWaveform> {
                     _formatDuration(_startPosition),
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
-                  if (widget.isPlaying)
+                  if (_isPlaying)
                     Text(
                       _formatDuration(_currentPosition),
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   Text(
                     _formatDuration(_endPosition),
@@ -195,6 +191,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
               ),
             ),
             const SizedBox(height: 8),
+
+            // 2. Dalga Formu ve Oynatma Kontrolü
             Container(
               height: waveformHeight,
               decoration: BoxDecoration(
@@ -255,7 +253,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                   ),
                                 ),
                               ),
-                              if (widget.isPlaying)
+                              if (_isPlaying)
                                 Positioned(
                                   left: horizontalPadding +
                                       (_currentPosition *
@@ -342,6 +340,56 @@ class _CustomWaveformState extends State<CustomWaveform> {
                         ),
                       ),
                     ),
+            ),
+
+            // 4. Zoom Kontrolleri
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.zoom_out),
+                    onPressed: fixZoomScale != '1.0' ? _handleZoomOut : null,
+                    tooltip: 'Uzaklaş',
+                    color: _scaleFactor > minZoom ? null : Colors.grey,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'Zoom: ${fixZoomScale}x',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.zoom_in),
+                    onPressed: fixZoomScale != '2.9' ? _handleZoomIn : null,
+                    tooltip: 'Yakınlaş',
+                  ),
+                ],
+              ),
+            ),
+
+            // 5. Play/Pause Butonu
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                iconSize: 32,
+                icon: Icon(
+                  _isPlaying ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white,
+                ),
+                onPressed: _togglePlayPause,
+              ),
             ),
           ],
         );
