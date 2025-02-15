@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 
@@ -8,6 +9,9 @@ class CustomWaveform extends StatefulWidget {
   final double duration;
   final double maxDuration;
   final Function(double start, double end) onSeek;
+  final PlayerController playerController;
+  final bool isPlaying;
+  final Function() onPlayPause;
 
   const CustomWaveform({
     Key? key,
@@ -17,6 +21,9 @@ class CustomWaveform extends StatefulWidget {
     required this.duration,
     required this.maxDuration,
     required this.onSeek,
+    required this.playerController,
+    required this.isPlaying,
+    required this.onPlayPause,
   }) : super(key: key);
 
   @override
@@ -33,7 +40,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
   static const double maxZoom = 800.0;
   static const double defaultZoom = 280.0;
 
-  late PlayerController _playerController;
   late double _startPosition;
   late double _endPosition;
   bool _isDraggingStart = false;
@@ -41,31 +47,29 @@ class _CustomWaveformState extends State<CustomWaveform> {
   bool _isInitialized = false;
   double _scaleFactor = defaultZoom;
   final ScrollController _scrollController = ScrollController();
+  StreamSubscription? _positionSubscription;
+  double _currentPosition = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
     _initializePositions();
+    _setupPositionListener();
   }
 
-  Future<void> _initializePlayer() async {
-    _playerController = PlayerController();
-    try {
-      await _playerController.preparePlayer(
-        path: widget.audioPath,
-        shouldExtractWaveform: true,
-        noOfSamples: 300,
-      );
-      setState(() => _isInitialized = true);
-    } catch (e) {
-      debugPrint('Ses yükleme hatası: $e');
-    }
+  void _setupPositionListener() {
+    _positionSubscription?.cancel();
+    _positionSubscription =
+        widget.playerController.onCurrentDurationChanged.listen((duration) {
+      setState(() {
+        _currentPosition = duration / 1000; // ms to seconds
+      });
+    });
   }
 
   @override
   void dispose() {
-    _playerController.dispose();
+    _positionSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -82,6 +86,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
   void _initializePositions() {
     _startPosition = widget.startTime;
     _endPosition = widget.endTime;
+    setState(() => _isInitialized = true);
   }
 
   double _normalizePosition(double position) {
@@ -107,6 +112,11 @@ class _CustomWaveformState extends State<CustomWaveform> {
 
     start = _normalizePosition(start);
     end = _normalizePosition(end);
+
+    // Seçim değiştiğinde oynatmayı duraklat
+    if (widget.isPlaying) {
+      widget.onPlayPause();
+    }
 
     setState(() {
       _startPosition = start;
@@ -140,7 +150,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
 
         return Column(
           children: [
-            // Zoom kontrolleri
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Row(
@@ -164,7 +173,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
                 ],
               ),
             ),
-            // Süre göstergeleri (zoom durumundan bağımsız)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: Row(
@@ -172,22 +180,21 @@ class _CustomWaveformState extends State<CustomWaveform> {
                 children: [
                   Text(
                     _formatDuration(_startPosition),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
+                  if (widget.isPlaying)
+                    Text(
+                      _formatDuration(_currentPosition),
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
                   Text(
                     _formatDuration(_endPosition),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8), // Küçük bir boşluk
+            const SizedBox(height: 8),
             Container(
               height: waveformHeight,
               decoration: BoxDecoration(
@@ -200,8 +207,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
                       onNotification: (ScrollNotification notification) {
                         if (notification is ScrollUpdateNotification) {
                           final delta = notification.scrollDelta ?? 0;
-
-                          // Scroll delta'sını zoom oranına göre normalize et
                           final scrollDeltaInSeconds =
                               delta / (pixelsPerSecond * zoomScale);
 
@@ -226,31 +231,43 @@ class _CustomWaveformState extends State<CustomWaveform> {
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: [
-                              // Dalga formu
                               Positioned.fill(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: horizontalPadding),
                                   child: AudioFileWaveforms(
                                     size: Size(scaledWidth, waveformHeight),
-                                    playerController: _playerController,
+                                    playerController: widget.playerController,
                                     enableSeekGesture: false,
                                     waveformType: WaveformType.fitWidth,
                                     playerWaveStyle: PlayerWaveStyle(
                                       fixedWaveColor: Colors.grey.shade300,
-                                      liveWaveColor:
-                                          Theme.of(context).primaryColor,
+                                      liveWaveColor: Colors.grey.shade300,
                                       spacing: 4,
                                       backgroundColor: Colors.white,
                                       showTop: true,
                                       showBottom: true,
-                                      showSeekLine: false,
+                                      showSeekLine: true,
+                                      seekLineColor: Colors.red,
+                                      seekLineThickness: 2,
                                       scaleFactor: _scaleFactor,
                                     ),
                                   ),
                                 ),
                               ),
-                              // Seçili alan
+                              if (widget.isPlaying)
+                                Positioned(
+                                  left: horizontalPadding +
+                                      (_currentPosition *
+                                          pixelsPerSecond *
+                                          zoomScale),
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 2,
+                                    color: Colors.red,
+                                  ),
+                                ),
                               Positioned(
                                 left: horizontalPadding +
                                     (_startPosition *
@@ -282,7 +299,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                   ),
                                 ),
                               ),
-                              // Sol tutamaç
                               _buildPositionHandle(
                                 context: context,
                                 position: _startPosition,
@@ -302,7 +318,6 @@ class _CustomWaveformState extends State<CustomWaveform> {
                                 },
                                 onDragEnd: () => _isDraggingStart = false,
                               ),
-                              // Sağ tutamaç
                               _buildPositionHandle(
                                 context: context,
                                 position: _endPosition,

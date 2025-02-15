@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/clip_editor_provider.dart';
@@ -25,6 +26,7 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
   late PlayerController _playerController;
   bool _isPlaying = false;
   bool _isInitialized = false;
+  StreamSubscription? _playerSubscription;
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _playerSubscription?.cancel();
     _playerController.dispose();
     super.dispose();
   }
@@ -46,14 +49,26 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
       await _playerController.preparePlayer(
         path: widget.audioPath,
         shouldExtractWaveform: true,
+        noOfSamples: 300,
       );
 
       String originalFileName = widget.audioPath.split('/').last;
       originalFileName = originalFileName.replaceAll(RegExp(r'\.mp3$'), '');
-
       _nameController.text = originalFileName;
 
       await ref.read(clipEditorProvider.notifier).loadAudio(widget.audioPath);
+
+      _playerSubscription =
+          _playerController.onCurrentDurationChanged.listen((positionMs) {
+        final currentPosition = positionMs / 1000;
+        final editorState = ref.read(clipEditorProvider);
+
+        if (currentPosition >= editorState.endTime) {
+          _togglePlayPause();
+          _playerController.seekTo((editorState.startTime * 1000).toInt());
+        }
+      });
+
       setState(() => _isInitialized = true);
     } catch (e) {
       if (mounted) {
@@ -68,26 +83,18 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
     try {
       final editorState = ref.read(clipEditorProvider);
 
+      setState(() => _isPlaying = !_isPlaying);
+
       if (_isPlaying) {
-        await _playerController.pausePlayer();
-      } else {
-        // milliseconds cinsinden seekTo pozisyonunu hesapla
         final seekPosition = (editorState.startTime * 1000).toInt();
         await _playerController.seekTo(seekPosition);
         await _playerController.startPlayer();
-
-        _playerController.onCurrentDurationChanged.listen((positionMs) {
-          final currentPosition = positionMs / 1000; // saniyeye çevir
-          if (currentPosition >= editorState.endTime) {
-            _playerController.pausePlayer();
-            _playerController.seekTo((editorState.startTime * 1000).toInt());
-            setState(() => _isPlaying = false);
-          }
-        });
+      } else {
+        await _playerController.pausePlayer();
       }
-      setState(() => _isPlaying = !_isPlaying);
     } catch (e) {
       print('Oynatma hatası: $e');
+      setState(() => _isPlaying = false);
     }
   }
 
@@ -109,13 +116,15 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
 
     if (outputPath != null && mounted) {
       final audioNotifier = ref.read(audioProvider.notifier);
-      await audioNotifier.addClip(File(outputPath),
-          folderId: widget.folderId,
-          customName: clipName,
-          duration: clipDuration,
-          keepFolderId: true);
+      await audioNotifier.addClip(
+        File(outputPath),
+        folderId: widget.folderId,
+        customName: clipName,
+        duration: clipDuration,
+        keepFolderId: true,
+      );
 
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(outputPath);
     }
   }
 
@@ -130,102 +139,121 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
   Widget build(BuildContext context) {
     final editorState = ref.watch(clipEditorProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Klip Oluştur'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isPlaying) {
+          await _playerController.pausePlayer();
+        }
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Klip Oluştur'),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
-      ),
-      body: editorState.isLoading || !_isInitialized
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Klip İsmi',
-                      border: OutlineInputBorder(),
-                      hintText: 'Klip için özel bir isim girin',
+        body: editorState.isLoading || !_isInitialized
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Klip İsmi',
+                        border: OutlineInputBorder(),
+                        hintText: 'Klip için özel bir isim girin',
+                      ),
+                      onChanged: (value) {
+                        final sanitizedName = value.trim();
+                        _nameController.text = sanitizedName;
+                        _nameController.selection = TextSelection.fromPosition(
+                          TextPosition(offset: sanitizedName.length),
+                        );
+                      },
                     ),
-                    onChanged: (value) {
-                      final sanitizedName = value.trim();
-                      _nameController.text = sanitizedName;
-                      _nameController.selection = TextSelection.fromPosition(
-                        TextPosition(offset: sanitizedName.length),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Seçilen: ${_formatDuration(editorState.selectedDuration)} / '
-                    'Maksimum: ${_formatDuration(ClipEditorState.maxDuration)}',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  CustomWaveform(
-                    audioPath: widget.audioPath,
-                    startTime: editorState.startTime,
-                    endTime: editorState.endTime,
-                    duration: editorState.duration,
-                    maxDuration: ClipEditorState.maxDuration,
-                    onSeek: (start, end) {
-                      ref
-                          .read(clipEditorProvider.notifier)
-                          .updateTimeRange(start, end);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  IconButton(
-                    iconSize: 64,
-                    icon: Icon(
-                      _isPlaying ? Icons.pause_circle : Icons.play_circle,
-                      color: Theme.of(context).primaryColor,
+                    const SizedBox(height: 24),
+                    Text(
+                      'Seçilen: ${_formatDuration(editorState.selectedDuration)} / '
+                      'Maksimum: ${_formatDuration(ClipEditorState.maxDuration)}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    onPressed: _togglePlayPause,
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: editorState.isSaving ? null : _saveClip,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 24),
+                    Expanded(
+                      child: CustomWaveform(
+                        audioPath: widget.audioPath,
+                        startTime: editorState.startTime,
+                        endTime: editorState.endTime,
+                        duration: editorState.duration,
+                        maxDuration: ClipEditorState.maxDuration,
+                        playerController: _playerController,
+                        isPlaying: _isPlaying,
+                        onPlayPause: _togglePlayPause,
+                        onSeek: (start, end) {
+                          ref
+                              .read(clipEditorProvider.notifier)
+                              .updateTimeRange(start, end);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          iconSize: 64,
+                          icon: Icon(
+                            _isPlaying ? Icons.pause_circle : Icons.play_circle,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          onPressed: _togglePlayPause,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: editorState.isSaving ? null : _saveClip,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: editorState.isSaving
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text(
+                                'KAYDET',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    if (editorState.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          editorState.error!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                      child: editorState.isSaving
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text(
-                              'KAYDET',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
-                  if (editorState.error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        editorState.error!,
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
