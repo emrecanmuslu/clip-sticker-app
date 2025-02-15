@@ -25,10 +25,13 @@ class CustomWaveform extends StatefulWidget {
 
 class _CustomWaveformState extends State<CustomWaveform> {
   static const double minDuration = 1.0;
-  static const double handleWidth = 24.0; // Genişliği artırdık
-  static const double horizontalPadding = 24.0; // Padding'i azalttık
+  static const double handleWidth = 24.0;
+  static const double horizontalPadding = 24.0;
   static const double waveformHeight = 100.0;
   static const double handleHeight = 100.0;
+  static const double minZoom = 100.0;
+  static const double maxZoom = 800.0;
+  static const double defaultZoom = 280.0;
 
   late PlayerController _playerController;
   late double _startPosition;
@@ -36,6 +39,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
   bool _isDraggingStart = false;
   bool _isDraggingEnd = false;
   bool _isInitialized = false;
+  double _scaleFactor = defaultZoom;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -50,7 +55,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
       await _playerController.preparePlayer(
         path: widget.audioPath,
         shouldExtractWaveform: true,
-        noOfSamples: 150, // Örnek sayısını artırdık
+        noOfSamples: 300,
       );
       setState(() => _isInitialized = true);
     } catch (e) {
@@ -61,6 +66,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
   @override
   void dispose() {
     _playerController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -110,137 +116,196 @@ class _CustomWaveformState extends State<CustomWaveform> {
     widget.onSeek(start, end);
   }
 
+  void _handleZoomIn() {
+    setState(() {
+      _scaleFactor = (_scaleFactor * 1.2).clamp(minZoom, maxZoom);
+    });
+  }
+
+  void _handleZoomOut() {
+    setState(() {
+      _scaleFactor = (_scaleFactor / 1.2).clamp(minZoom, maxZoom);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth - (horizontalPadding * 2);
         final pixelsPerSecond = availableWidth / widget.duration;
+        final zoomScale = _scaleFactor / defaultZoom;
+        final scaledWidth = availableWidth * zoomScale;
 
-        return Container(
-          height: 100,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: !_isInitialized
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Dalga formu
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: horizontalPadding),
-                        child: AudioFileWaveforms(
-                          size: Size(availableWidth, waveformHeight),
-                          playerController: _playerController,
-                          enableSeekGesture: false,
-                          waveformType: WaveformType.fitWidth,
-                          playerWaveStyle: PlayerWaveStyle(
-                            fixedWaveColor: Colors.grey.shade300,
-                            liveWaveColor: Theme.of(context).primaryColor,
-                            spacing: 4,
-                            backgroundColor: Colors.white,
-                            showTop: true,
-                            showBottom: true,
-                            showSeekLine: false,
-                            scaleFactor: 280.0,
-                          ),
+        return Column(
+          children: [
+            // Zoom kontrolleri
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.zoom_out),
+                    onPressed: _handleZoomOut,
+                    tooltip: 'Uzaklaş',
+                  ),
+                  Text(
+                    'Zoom: ${zoomScale.toStringAsFixed(1)}x',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.zoom_in),
+                    onPressed: _handleZoomIn,
+                    tooltip: 'Yakınlaş',
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              height: waveformHeight,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: !_isInitialized
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: scaledWidth,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            // Dalga formu
+                            Positioned.fill(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: horizontalPadding),
+                                child: AudioFileWaveforms(
+                                  size: Size(scaledWidth, waveformHeight),
+                                  playerController: _playerController,
+                                  enableSeekGesture: false,
+                                  waveformType: WaveformType.fitWidth,
+                                  playerWaveStyle: PlayerWaveStyle(
+                                    fixedWaveColor: Colors.grey.shade300,
+                                    liveWaveColor:
+                                        Theme.of(context).primaryColor,
+                                    spacing: 4,
+                                    backgroundColor: Colors.white,
+                                    showTop: true,
+                                    showBottom: true,
+                                    showSeekLine: false,
+                                    scaleFactor: _scaleFactor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Seçili alan
+                            Positioned(
+                              left: horizontalPadding +
+                                  (_startPosition *
+                                      pixelsPerSecond *
+                                      zoomScale),
+                              width: (_endPosition - _startPosition) *
+                                  pixelsPerSecond *
+                                  zoomScale,
+                              top: 0,
+                              height: handleHeight,
+                              child: GestureDetector(
+                                onHorizontalDragUpdate: (details) {
+                                  final delta = details.delta.dx /
+                                      (pixelsPerSecond * zoomScale);
+                                  final newStart = _startPosition + delta;
+                                  final newEnd = _endPosition + delta;
+
+                                  if (newStart >= 0 &&
+                                      newEnd <= widget.duration) {
+                                    _updatePositions(newStart, newEnd);
+                                  }
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .primaryColor
+                                        .withOpacity(0.1),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Sol tutamaç
+                            _buildPositionHandle(
+                              context: context,
+                              position: _startPosition,
+                              pixelsPerSecond: pixelsPerSecond,
+                              zoomScale: zoomScale,
+                              isStart: true,
+                              onDragStart: () => _isDraggingStart = true,
+                              onDragUpdate: (details) {
+                                final RenderBox box =
+                                    context.findRenderObject() as RenderBox;
+                                final localPosition =
+                                    box.globalToLocal(details.globalPosition);
+                                final newStart =
+                                    (localPosition.dx - horizontalPadding) /
+                                        (pixelsPerSecond * zoomScale);
+                                _updatePositions(newStart, _endPosition);
+                              },
+                              onDragEnd: () => _isDraggingStart = false,
+                            ),
+                            // Sağ tutamaç
+                            _buildPositionHandle(
+                              context: context,
+                              position: _endPosition,
+                              pixelsPerSecond: pixelsPerSecond,
+                              zoomScale: zoomScale,
+                              isStart: false,
+                              onDragStart: () => _isDraggingEnd = true,
+                              onDragUpdate: (details) {
+                                final RenderBox box =
+                                    context.findRenderObject() as RenderBox;
+                                final localPosition =
+                                    box.globalToLocal(details.globalPosition);
+                                final newEnd =
+                                    (localPosition.dx - horizontalPadding) /
+                                        (pixelsPerSecond * zoomScale);
+                                _updatePositions(_startPosition, newEnd);
+                              },
+                              onDragEnd: () => _isDraggingEnd = false,
+                            ),
+                            // Süre göstergeleri
+                            Positioned(
+                              top: -20,
+                              left: horizontalPadding,
+                              right: horizontalPadding,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDuration(_startPosition),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDuration(_endPosition),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    // Seçili alan overlay
-                    Positioned(
-                      left: horizontalPadding +
-                          (_startPosition * pixelsPerSecond),
-                      width: (_endPosition - _startPosition) * pixelsPerSecond,
-                      top: 0,
-                      height: handleHeight,
-                      child: GestureDetector(
-                        onHorizontalDragUpdate: (details) {
-                          final delta = details.delta.dx / pixelsPerSecond;
-                          final newStart = _startPosition + delta;
-                          final newEnd = _endPosition + delta;
-
-                          // Sınırları kontrol et
-                          if (newStart >= 0 && newEnd <= widget.duration) {
-                            _updatePositions(newStart, newEnd);
-                          }
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(context).primaryColor.withOpacity(0.1),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Sol tutamaç
-                    _buildPositionHandle(
-                      context: context,
-                      position: _startPosition,
-                      pixelsPerSecond: pixelsPerSecond,
-                      isStart: true,
-                      onDragStart: () => _isDraggingStart = true,
-                      onDragUpdate: (details) {
-                        final RenderBox box =
-                            context.findRenderObject() as RenderBox;
-                        final localPosition =
-                            box.globalToLocal(details.globalPosition);
-                        final newStart =
-                            (localPosition.dx - horizontalPadding) /
-                                pixelsPerSecond;
-                        _updatePositions(newStart, _endPosition);
-                      },
-                      onDragEnd: () => _isDraggingStart = false,
-                    ),
-                    // Sağ tutamaç
-                    _buildPositionHandle(
-                      context: context,
-                      position: _endPosition,
-                      pixelsPerSecond: pixelsPerSecond,
-                      isStart: false,
-                      onDragStart: () => _isDraggingEnd = true,
-                      onDragUpdate: (details) {
-                        final RenderBox box =
-                            context.findRenderObject() as RenderBox;
-                        final localPosition =
-                            box.globalToLocal(details.globalPosition);
-                        final newEnd = (localPosition.dx - horizontalPadding) /
-                            pixelsPerSecond;
-                        _updatePositions(_startPosition, newEnd);
-                      },
-                      onDragEnd: () => _isDraggingEnd = false,
-                    ),
-                    // Süre göstergeleri
-                    Positioned(
-                      top: -20,
-                      left: horizontalPadding,
-                      right: horizontalPadding,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _formatDuration(_startPosition),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                          Text(
-                            _formatDuration(_endPosition),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+          ],
         );
       },
     );
@@ -250,14 +315,16 @@ class _CustomWaveformState extends State<CustomWaveform> {
     required BuildContext context,
     required double position,
     required double pixelsPerSecond,
+    required double zoomScale,
     required bool isStart,
     required VoidCallback onDragStart,
     required Function(DragUpdateDetails) onDragUpdate,
     required VoidCallback onDragEnd,
   }) {
     return Positioned(
-      left:
-          horizontalPadding + (position * pixelsPerSecond) - (handleWidth / 2),
+      left: horizontalPadding +
+          (position * pixelsPerSecond * zoomScale) -
+          (handleWidth / 2),
       top: 0,
       child: GestureDetector(
         onHorizontalDragStart: (_) => onDragStart(),
