@@ -30,7 +30,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
   static const double minDuration = 5.0;
   static const double handleWidth = 24.0;
   static const double horizontalPadding = 16.0;
-  static const double waveformHeight = 100.0;
+  static const double waveformHeight = 120.0;
+  static const double waveformVerticalPadding = 8.0;
   static const double handleHeight = 100.0;
   static const double minZoom = 1.0;
   static const double maxZoom = 800.0;
@@ -213,6 +214,8 @@ class _CustomWaveformState extends State<CustomWaveform> {
             // 2. Dalga Formu ve Oynatma Kontrolü
             Container(
               height: waveformHeight,
+              padding: const EdgeInsets.symmetric(
+                                      vertical: waveformVerticalPadding),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
