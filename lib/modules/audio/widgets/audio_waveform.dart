@@ -118,13 +118,13 @@ class _CustomWaveformState extends State<CustomWaveform> {
 
   void _handleZoomIn() {
     setState(() {
-      _scaleFactor = (_scaleFactor * 1.2).clamp(minZoom, maxZoom);
+      _scaleFactor = (_scaleFactor * 1.1).clamp(minZoom, maxZoom);
     });
   }
 
   void _handleZoomOut() {
     setState(() {
-      _scaleFactor = (_scaleFactor / 1.2).clamp(minZoom, maxZoom);
+      _scaleFactor = (_scaleFactor / 1.1).clamp(minZoom, maxZoom);
     });
   }
 
@@ -136,6 +136,7 @@ class _CustomWaveformState extends State<CustomWaveform> {
         final pixelsPerSecond = availableWidth / widget.duration;
         final zoomScale = _scaleFactor / defaultZoom;
         final scaledWidth = constraints.maxWidth * zoomScale;
+        final fixZoomScale = zoomScale.toStringAsFixed(1);
 
         return Column(
           children: [
@@ -147,16 +148,17 @@ class _CustomWaveformState extends State<CustomWaveform> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.zoom_out),
-                    onPressed: _handleZoomOut,
+                    onPressed: fixZoomScale != '1.0' ? _handleZoomOut : null,
                     tooltip: 'Uzaklaş',
+                    color: _scaleFactor > minZoom ? null : Colors.grey,
                   ),
                   Text(
-                    'Zoom: ${zoomScale.toStringAsFixed(1)}x',
+                    'Zoom: ${fixZoomScale}x',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   IconButton(
                     icon: const Icon(Icons.zoom_in),
-                    onPressed: _handleZoomIn,
+                    onPressed: fixZoomScale != '2.9' ? _handleZoomIn : null,
                     tooltip: 'Yakınlaş',
                   ),
                 ],
