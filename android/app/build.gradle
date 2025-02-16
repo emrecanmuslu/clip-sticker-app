@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.clipsticker.app"
+    namespace = "com.example.clip_sticker"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
