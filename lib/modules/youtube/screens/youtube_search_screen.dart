@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import '../../../shared/utils/audio_file_handler.dart';
 import '../providers/youtube_search_provider.dart';
 import '../widgets/youtube_search_bar.dart';
 import '../widgets/video_list_item.dart';
@@ -45,7 +45,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
     if (!await _checkInternetConnection()) return;
 
     String? tempFilePath;
-    String? preparedFilePath;
+    String? cachedFilePath;
 
     try {
       ref.read(youtubeSearchProvider.notifier).setDownloading(true);
@@ -57,7 +57,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
         throw Exception('Dosya boyutu çok büyük (50MB limit)');
       }
 
-      // Geçici dosya oluştur
+      // Önce geçici dosyaya indir
       final tempDir = await getTemporaryDirectory();
       final safeFileName = video.title
           .replaceAll(RegExp(r'[^\w\s-]'), '')
@@ -66,7 +66,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       tempFilePath = path.join(tempDir.path, '$safeFileName.mp3');
 
-      // Videoyu indir
+      // Cache manager ile dosyayı indirme
       var stream = await _yt.videos.streamsClient.get(streamInfo);
       var fileStream = File(tempFilePath).openWrite();
       int receivedBytes = 0;
@@ -84,10 +84,13 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       if (!mounted) return;
 
-      // iOS için dosyayı hazırla
+      // iOS için cache manager ile hazırla
       if (Platform.isIOS) {
-        preparedFilePath =
-            await AudioFileHandler.prepareAudioFile(tempFilePath);
+        final file = await DefaultCacheManager().putFile(
+          'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
+          File(tempFilePath).readAsBytesSync(),
+        );
+        cachedFilePath = file.path;
       }
 
       // Clip editor'ı aç
@@ -95,7 +98,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => ClipEditorScreen(
-            audioPath: Platform.isIOS ? preparedFilePath! : tempFilePath!,
+            audioPath: Platform.isIOS ? cachedFilePath! : tempFilePath!,
           ),
         ),
       );
@@ -112,8 +115,16 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
       }
     } finally {
       // Geçici dosyaları temizle
-      await AudioFileHandler.cleanupTempFile(tempFilePath);
-      await AudioFileHandler.cleanupTempFile(preparedFilePath);
+      if (tempFilePath != null) {
+        try {
+          final tempFile = File(tempFilePath);
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+        } catch (e) {
+          print('Temp dosya silme hatası: $e');
+        }
+      }
 
       ref.read(youtubeSearchProvider.notifier).setDownloading(false);
       ref.read(youtubeSearchProvider.notifier).updateDownloadProgress(0);
