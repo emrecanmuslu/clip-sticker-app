@@ -89,7 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 },
               )
             : null,
-        title: Text(currentFolder?.name ?? 'Ses Kliplerim v1.0.0'),
+        title: Text(currentFolder?.name ?? 'Ses Kliplerim v1.0.1'),
       ),
       body: CustomScrollView(
         slivers: [
