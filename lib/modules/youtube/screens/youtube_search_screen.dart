@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_audio/return_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,30 +53,32 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
       ref.read(youtubeSearchProvider.notifier).setDownloading(true);
 
       var manifest = await _yt.videos.streamsClient.getManifest(video.id.value);
-      var streamInfo = manifest.audioOnly.withHighestBitrate();
+      // En iyi ses kalitesini seç
+      var streamInfo = manifest.audioOnly
+          .where((s) => s.size.totalBytes <= 50 * 1024 * 1024) // 50MB limit
+          .toList()
+          .last;
 
-      if (streamInfo.size.totalBytes > 50 * 1024 * 1024) {
-        throw Exception('Dosya boyutu çok büyük (50MB limit)');
+      if (streamInfo == null) {
+        throw Exception('Uygun ses kalitesi bulunamadı');
       }
 
-      // Önce geçici dosyaya indir
+      // Geçici dosya oluştur
       final tempDir = await getTemporaryDirectory();
-      final safeFileName = video.title
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .trim()
-          .replaceAll(RegExp(r'\s+'), '_');
+      final safeFileName = _getSafeFileName(video.title);
+      tempFilePath =
+          path.join(tempDir.path, '$safeFileName.m4a'); // iOS uyumlu format
 
-      tempFilePath = path.join(tempDir.path, '$safeFileName.mp3');
-
-      // Cache manager ile dosyayı indirme
+      // Sesi indir
       var stream = await _yt.videos.streamsClient.get(streamInfo);
       var fileStream = File(tempFilePath).openWrite();
       int receivedBytes = 0;
+      int totalBytes = streamInfo.size.totalBytes;
 
       await for (final data in stream) {
         fileStream.add(data);
         receivedBytes += data.length;
-        double progress = (receivedBytes / streamInfo.size.totalBytes) * 100;
+        double progress = (receivedBytes / totalBytes) * 100;
         ref
             .read(youtubeSearchProvider.notifier)
             .updateDownloadProgress(progress);
@@ -84,14 +88,43 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       if (!mounted) return;
 
-      // iOS için cache manager ile hazırla
+      // iOS için ses dosyasını hazırla
       if (Platform.isIOS) {
-        final file = await DefaultCacheManager().putFile(
-          'audio_${DateTime.now().millisecondsSinceEpoch}.mp3',
-          File(tempFilePath).readAsBytesSync(),
-        );
-        cachedFilePath = file.path;
+        try {
+          // FFmpeg ile ses dönüşümü yap
+          final outputPath =
+              path.join(tempDir.path, '${safeFileName}_converted.m4a');
+
+          final session = await FFmpegKit.execute(
+              '-i "$tempFilePath" -c:a aac -b:a 128k "$outputPath"');
+
+          final returnCode = await session.getReturnCode();
+
+          if (!ReturnCode.isSuccess(returnCode)) {
+            throw Exception('Ses dönüştürme başarısız oldu');
+          }
+
+          // Cache manager ile hazırla
+          final file = await DefaultCacheManager().putFile(
+            'audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
+            File(outputPath).readAsBytesSync(),
+            maxAge: const Duration(days: 1),
+          );
+
+          cachedFilePath = file.path;
+
+          // Geçici dönüşüm dosyasını temizle
+          if (await File(outputPath).exists()) {
+            await File(outputPath).delete();
+          }
+        } catch (e) {
+          print('Ses dönüştürme hatası: $e');
+          // Dönüşüm başarısız olursa orijinal dosyayı kullan
+          cachedFilePath = tempFilePath;
+        }
       }
+
+      if (!mounted) return;
 
       // Clip editor'ı aç
       final editedPath = await Navigator.push<String>(
@@ -110,24 +143,40 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('İndirme hatası: $e')),
+          SnackBar(
+            content: Text('İndirme hatası: $e'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     } finally {
-      // Geçici dosyaları temizle
-      if (tempFilePath != null) {
-        try {
-          final tempFile = File(tempFilePath);
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-          }
-        } catch (e) {
-          print('Temp dosya silme hatası: $e');
-        }
-      }
-
+      // Temizlik
+      await _cleanupTempFiles([tempFilePath, cachedFilePath]);
       ref.read(youtubeSearchProvider.notifier).setDownloading(false);
       ref.read(youtubeSearchProvider.notifier).updateDownloadProgress(0);
+    }
+  }
+
+  String _getSafeFileName(String title) {
+    return title
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '_')
+        .toLowerCase();
+  }
+
+  Future<void> _cleanupTempFiles(List<String?> paths) async {
+    for (final path in paths) {
+      if (path != null) {
+        try {
+          final file = File(path);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (e) {
+          print('Dosya temizleme hatası: $e');
+        }
+      }
     }
   }
 

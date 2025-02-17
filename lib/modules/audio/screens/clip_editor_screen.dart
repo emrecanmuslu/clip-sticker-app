@@ -78,7 +78,8 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
       await _playerController.preparePlayer(
         path: audioFilePath,
         shouldExtractWaveform: true,
-        noOfSamples: 300,
+        noOfSamples: Platform.isIOS ? 50 : 100,
+        volume: 1.0,
       );
 
       // Dosya adını ayarla
