@@ -15,7 +15,7 @@ class ClipEditorState {
   final bool isLoading;
   final String? error;
 
-  static const double maxDuration = 40.0; // 15 saniye
+  static const double maxDuration = 40.0;
 
   ClipEditorState({
     this.startTime = 0.0,
@@ -48,6 +48,7 @@ class ClipEditorState {
   }
 
   bool get isValid => endTime - startTime <= maxDuration;
+
   double get selectedDuration => endTime - startTime;
 }
 
@@ -57,15 +58,26 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
   Future<void> loadAudio(String filePath) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      // FFmpeg ile ses dosyasının süresini al
-      final probe = await FFprobeKit.execute('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filePath"');
-      final duration = double.parse((await probe.getOutput() ?? '0').trim());
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception('Ses dosyası bulunamadı');
+      }
+
+      final probe = await FFprobeKit.execute(
+          '-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filePath"');
+
+      final output = await probe.getOutput();
+      if (output == null || output.isEmpty) {
+        throw Exception('Ses süresi alınamadı');
+      }
+
+      final duration = double.parse(output.trim());
 
       state = state.copyWith(
         duration: duration,
         endTime: duration > ClipEditorState.maxDuration
-          ? ClipEditorState.maxDuration
-          : duration,
+            ? ClipEditorState.maxDuration
+            : duration,
         isLoading: false,
       );
     } catch (e) {
@@ -78,6 +90,11 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
 
   void updateTimeRange(double start, double end) {
     if (start < 0 || end > state.duration || start >= end) return;
+
+    if (end - start > ClipEditorState.maxDuration) {
+      end = start + ClipEditorState.maxDuration;
+    }
+
     state = state.copyWith(
       startTime: start,
       endTime: end,
@@ -99,19 +116,32 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final outputFileName = '${DateTime.now().millisecondsSinceEpoch}_$clipName.mp3';
-      outputPath = path.join(appDir.path, 'audios', outputFileName);
+      final audioDir = Directory(path.join(appDir.path, 'audios'));
 
-      await Directory(path.dirname(outputPath)).create(recursive: true);
+      if (!await audioDir.exists()) {
+        await audioDir.create(recursive: true);
+      }
 
-      final session = await FFmpegKit.execute(
-        '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} -c:a libmp3lame -q:a 2 "$outputPath"'
-      );
+      final safeFileName = clipName
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      outputPath = path.join(audioDir.path, '${timestamp}_$safeFileName.mp3');
 
+      final command =
+          '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} -c:a libmp3lame -q:a 2 "$outputPath"';
+      final session = await FFmpegKit.execute(command);
       final returnCode = await session.getReturnCode();
 
       if (!ReturnCode.isSuccess(returnCode)) {
-        throw Exception('Ses kesme işlemi başarısız oldu');
+        final logs = await session.getLogs();
+        throw Exception('Ses kesme işlemi başarısız oldu: ${logs.join("\n")}');
+      }
+
+      final outputFile = File(outputPath);
+      if (!await outputFile.exists()) {
+        throw Exception('Çıktı dosyası oluşturulamadı');
       }
 
       state = state.copyWith(isSaving: false);
@@ -122,7 +152,6 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
         error: 'Kaydetme hatası: $e',
       );
 
-      // Hata durumunda oluşturulan dosyayı temizle
       if (outputPath != null) {
         try {
           final file = File(outputPath);
@@ -137,6 +166,7 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
 }
 
 final clipEditorProvider =
-    StateNotifierProvider.autoDispose<ClipEditorNotifier, ClipEditorState>((ref) {
+    StateNotifierProvider.autoDispose<ClipEditorNotifier, ClipEditorState>(
+        (ref) {
   return ClipEditorNotifier();
 });

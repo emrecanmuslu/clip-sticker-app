@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../providers/clip_editor_provider.dart';
 import '../providers/audio_provider.dart';
-import 'package:audio_waveforms/audio_waveforms.dart';
 import '../widgets/audio_waveform.dart';
 
 class ClipEditorScreen extends ConsumerStatefulWidget {
@@ -26,11 +28,12 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
   late PlayerController _playerController;
   bool _isInitialized = false;
   StreamSubscription? _playerSubscription;
+  String? _preparedAudioPath;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
+    _initializeEditor();
   }
 
   @override
@@ -38,25 +41,54 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
     _nameController.dispose();
     _playerSubscription?.cancel();
     _playerController.dispose();
+    _cleanupTempFiles();
     super.dispose();
   }
 
-  Future<void> _initializePlayer() async {
-    _playerController = PlayerController();
+  Future<void> _cleanupTempFiles() async {
+    if (_preparedAudioPath != null) {
+      try {
+        final file = File(_preparedAudioPath!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (e) {
+        print('Geçici dosya temizleme hatası: $e');
+      }
+    }
+  }
 
+  Future<void> _initializeEditor() async {
     try {
+      _playerController = PlayerController();
+
+      // iOS için ses dosyasını geçici dizine kopyala
+      String audioFilePath = widget.audioPath;
+      if (Platform.isIOS) {
+        final tempDir = await getTemporaryDirectory();
+        final fileName = path.basename(widget.audioPath);
+        _preparedAudioPath = path.join(tempDir.path, 'prepared_$fileName');
+
+        // Orijinal dosyayı geçici konuma kopyala
+        await File(widget.audioPath).copy(_preparedAudioPath!);
+        audioFilePath = _preparedAudioPath!;
+      }
+
+      // Waveform için ses dosyasını hazırla
       await _playerController.preparePlayer(
-        path: widget.audioPath,
+        path: audioFilePath,
         shouldExtractWaveform: true,
         noOfSamples: 300,
       );
 
-      String originalFileName = widget.audioPath.split('/').last;
-      originalFileName = originalFileName.replaceAll(RegExp(r'\.mp3$'), '');
+      // Dosya adını ayarla
+      String originalFileName = path.basenameWithoutExtension(widget.audioPath);
       _nameController.text = originalFileName;
 
-      await ref.read(clipEditorProvider.notifier).loadAudio(widget.audioPath);
+      // Provider'ı başlat
+      await ref.read(clipEditorProvider.notifier).loadAudio(audioFilePath);
 
+      // Oynatma pozisyonunu takip et
       _playerSubscription =
           _playerController.onCurrentDurationChanged.listen((positionMs) {
         final currentPosition = positionMs / 1000;
@@ -90,9 +122,12 @@ class _ClipEditorScreenState extends ConsumerState<ClipEditorScreen> {
     final editorState = ref.read(clipEditorProvider);
     final clipDuration = editorState.endTime - editorState.startTime;
 
+    // iOS için geçici dosya yolunu kullan
+    final sourcePath = Platform.isIOS ? _preparedAudioPath! : widget.audioPath;
+
     final outputPath = await ref
         .read(clipEditorProvider.notifier)
-        .saveClip(widget.audioPath, clipName);
+        .saveClip(sourcePath, clipName);
 
     if (outputPath != null && mounted) {
       final audioNotifier = ref.read(audioProvider.notifier);
