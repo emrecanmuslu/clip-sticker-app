@@ -53,14 +53,10 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
       ref.read(youtubeSearchProvider.notifier).setDownloading(true);
 
       var manifest = await _yt.videos.streamsClient.getManifest(video.id.value);
-      var streamInfo = manifest.audioOnly
-          .where((s) => s.audioCodec != 'opus')
-          .where((s) => s.size.totalBytes <= 50 * 1024 * 1024)
-          .toList()
-          .last;
+      var streamInfo = manifest.audioOnly.withHighestBitrate();
 
-      if (streamInfo == null) {
-        throw Exception('Uygun ses kalitesi bulunamadı');
+      if (streamInfo.size.totalBytes > 50 * 1024 * 1024) {
+        throw Exception('Dosya boyutu çok büyük (50MB limit)');
       }
 
       // Geçici dosya oluştur
