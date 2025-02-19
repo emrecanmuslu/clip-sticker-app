@@ -47,13 +47,12 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
     if (!await _checkInternetConnection()) return;
 
     String? tempFilePath;
-    String? cachedFilePath;
+    String? tempOutputPath;
 
     try {
       ref.read(youtubeSearchProvider.notifier).setDownloading(true);
 
       var manifest = await _yt.videos.streamsClient.getManifest(video.id.value);
-      // En iyi ses kalitesini seç
       var streamInfo = manifest.audioOnly
           .where((s) => s.size.totalBytes <= 50 * 1024 * 1024) // 50MB limit
           .toList()
@@ -65,9 +64,14 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       // Geçici dosya oluştur
       final tempDir = await getTemporaryDirectory();
-      final safeFileName = _getSafeFileName(video.title);
-      tempFilePath =
-          path.join(tempDir.path, '$safeFileName.m4a'); // iOS uyumlu format
+      final safeFileName = video.title
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_')
+          .toLowerCase();
+
+      tempFilePath = path.join(tempDir.path, '${safeFileName}_temp.m4a');
+      tempOutputPath = path.join(tempDir.path, '${safeFileName}.mp3');
 
       // Sesi indir
       var stream = await _yt.videos.streamsClient.get(streamInfo);
@@ -86,42 +90,20 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       await fileStream.close();
 
-      if (!mounted) return;
-
-      // iOS için ses dosyasını hazırla
+      // iOS için ses dönüşümü
       if (Platform.isIOS) {
-        try {
-          // FFmpeg ile ses dönüşümü yap
-          final outputPath =
-              path.join(tempDir.path, '${safeFileName}_converted.m4a');
+        final session = await FFmpegKit.execute(
+            '-i "$tempFilePath" -c:a aac -b:a 192k -ar 44100 "$tempOutputPath"');
 
-          final session = await FFmpegKit.execute(
-              '-i "$tempFilePath" -c:a aac -b:a 128k "$outputPath"');
+        final returnCode = await session.getReturnCode();
 
-          final returnCode = await session.getReturnCode();
-
-          if (!ReturnCode.isSuccess(returnCode)) {
-            throw Exception('Ses dönüştürme başarısız oldu');
-          }
-
-          // Cache manager ile hazırla
-          final file = await DefaultCacheManager().putFile(
-            'audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
-            File(outputPath).readAsBytesSync(),
-            maxAge: const Duration(days: 1),
-          );
-
-          cachedFilePath = file.path;
-
-          // Geçici dönüşüm dosyasını temizle
-          if (await File(outputPath).exists()) {
-            await File(outputPath).delete();
-          }
-        } catch (e) {
-          print('Ses dönüştürme hatası: $e');
-          // Dönüşüm başarısız olursa orijinal dosyayı kullan
-          cachedFilePath = tempFilePath;
+        if (!ReturnCode.isSuccess(returnCode)) {
+          throw Exception('Ses dönüştürme başarısız oldu');
         }
+
+        // Geçici dosyayı temizle
+        await File(tempFilePath).delete();
+        tempFilePath = tempOutputPath;
       }
 
       if (!mounted) return;
@@ -131,7 +113,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => ClipEditorScreen(
-            audioPath: Platform.isIOS ? cachedFilePath! : tempFilePath!,
+            audioPath: tempFilePath!,
           ),
         ),
       );
@@ -143,15 +125,22 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('İndirme hatası: $e'),
-            duration: const Duration(seconds: 3),
-          ),
+          SnackBar(content: Text('İndirme hatası: $e')),
         );
       }
     } finally {
       // Temizlik
-      await _cleanupTempFiles([tempFilePath, cachedFilePath]);
+      for (var path in [tempFilePath, tempOutputPath]) {
+        if (path != null) {
+          try {
+            final file = File(path);
+            if (await file.exists()) {
+              await file.delete();
+            }
+          } catch (_) {}
+        }
+      }
+
       ref.read(youtubeSearchProvider.notifier).setDownloading(false);
       ref.read(youtubeSearchProvider.notifier).updateDownloadProgress(0);
     }

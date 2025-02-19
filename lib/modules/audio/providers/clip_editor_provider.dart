@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_audio/ffprobe_kit.dart';
@@ -63,15 +64,25 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
         throw Exception('Ses dosyası bulunamadı');
       }
 
-      final probe = await FFprobeKit.execute(
-          '-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filePath"');
+      // iOS için özel probe komutu
+      final probe = Platform.isIOS
+          ? await FFprobeKit.execute(
+              '-v quiet -print_format json -show_format -show_streams "$filePath"')
+          : await FFprobeKit.execute(
+              '-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filePath"');
 
       final output = await probe.getOutput();
       if (output == null || output.isEmpty) {
         throw Exception('Ses süresi alınamadı');
       }
 
-      final duration = double.parse(output.trim());
+      double duration;
+      if (Platform.isIOS) {
+        final data = json.decode(output);
+        duration = double.parse(data['format']['duration']);
+      } else {
+        duration = double.parse(output.trim());
+      }
 
       state = state.copyWith(
         duration: duration,
@@ -113,6 +124,7 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
 
     state = state.copyWith(isSaving: true, error: null);
     String? outputPath;
+    String? tempPath;
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -127,16 +139,45 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
           .trim()
           .replaceAll(RegExp(r'\s+'), '_');
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      outputPath = path.join(audioDir.path, '${timestamp}_$safeFileName.mp3');
 
-      final command =
-          '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} -c:a libmp3lame -q:a 2 "$outputPath"';
-      final session = await FFmpegKit.execute(command);
-      final returnCode = await session.getReturnCode();
+      // iOS için geçici dosya oluştur
+      if (Platform.isIOS) {
+        final tempDir = await getTemporaryDirectory();
+        tempPath = path.join(tempDir.path, '${timestamp}_temp.m4a');
+        outputPath = path.join(audioDir.path, '${timestamp}_$safeFileName.m4a');
 
-      if (!ReturnCode.isSuccess(returnCode)) {
-        final logs = await session.getLogs();
-        throw Exception('Ses kesme işlemi başarısız oldu: ${logs.join("\n")}');
+        final command =
+            '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} '
+            '-c:a aac -b:a 192k -ar 44100 "$tempPath"';
+
+        final session = await FFmpegKit.execute(command);
+        final returnCode = await session.getReturnCode();
+
+        if (!ReturnCode.isSuccess(returnCode)) {
+          final logs = await session.getLogs();
+          throw Exception(
+              'Ses kesme işlemi başarısız oldu: ${logs.join("\n")}');
+        }
+
+        // Geçici dosyayı son konuma taşı
+        await File(tempPath).copy(outputPath);
+        await File(tempPath).delete();
+      } else {
+        // Android için direkt MP3 olarak kaydet
+        outputPath = path.join(audioDir.path, '${timestamp}_$safeFileName.mp3');
+
+        final command =
+            '-y -i "$sourceFile" -ss ${state.startTime} -t ${state.selectedDuration} '
+            '-c:a libmp3lame -q:a 2 "$outputPath"';
+
+        final session = await FFmpegKit.execute(command);
+        final returnCode = await session.getReturnCode();
+
+        if (!ReturnCode.isSuccess(returnCode)) {
+          final logs = await session.getLogs();
+          throw Exception(
+              'Ses kesme işlemi başarısız oldu: ${logs.join("\n")}');
+        }
       }
 
       final outputFile = File(outputPath);
@@ -152,13 +193,16 @@ class ClipEditorNotifier extends StateNotifier<ClipEditorState> {
         error: 'Kaydetme hatası: $e',
       );
 
-      if (outputPath != null) {
-        try {
-          final file = File(outputPath);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (_) {}
+      // Hata durumunda temizlik
+      for (final path in [outputPath, tempPath]) {
+        if (path != null) {
+          try {
+            final file = File(path);
+            if (await file.exists()) {
+              await file.delete();
+            }
+          } catch (_) {}
+        }
       }
       return null;
     }
