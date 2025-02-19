@@ -92,21 +92,26 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       // iOS için ses dönüşümü
       if (Platform.isIOS) {
-        // iOS için daha basit bir komut kullanalım
-        final command = '-i "$tempFilePath" -vn -acodec aac "$tempOutputPath"';
+        // Önce opus'u AAC'ye dönüştür
+        final intermediateFile =
+            path.join(tempDir.path, '${safeFileName}_intermediate.m4a');
+
+        final command =
+            '-i "$tempFilePath" -c:a aac -b:a 192k -ar 44100 "$intermediateFile"';
 
         final session = await FFmpegKit.execute(command);
         final returnCode = await session.getReturnCode();
+        final logs = await session.getLogs();
+
+        print('FFmpeg komut çıktısı: ${logs.join("\n")}');
 
         if (!ReturnCode.isSuccess(returnCode)) {
-          final logs = await session.getLogs();
-          print('FFmpeg hata logları: ${logs.join("\n")}');
-          throw Exception('Ses dönüştürme başarısız oldu');
+          throw Exception('Ses dönüştürme başarısız oldu: ${logs.join("\n")}');
         }
 
-        // Geçici dosyayı temizle
+        // Geçici dosyaları temizle
         await File(tempFilePath).delete();
-        tempFilePath = tempOutputPath;
+        tempFilePath = intermediateFile;
       }
 
       if (!mounted) return;
