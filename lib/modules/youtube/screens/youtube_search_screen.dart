@@ -54,7 +54,8 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       var manifest = await _yt.videos.streamsClient.getManifest(video.id.value);
       var streamInfo = manifest.audioOnly
-          .where((s) => s.size.totalBytes <= 50 * 1024 * 1024) // 50MB limit
+          .where((s) => s.audioCodec != 'opus')
+          .where((s) => s.size.totalBytes <= 50 * 1024 * 1024)
           .toList()
           .last;
 
