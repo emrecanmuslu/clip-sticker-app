@@ -92,12 +92,15 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       // iOS için ses dönüşümü
       if (Platform.isIOS) {
-        final session = await FFmpegKit.execute(
-            '-i "$tempFilePath" -c:a aac -b:a 192k -ar 44100 "$tempOutputPath"');
+        // iOS için daha basit bir komut kullanalım
+        final command = '-i "$tempFilePath" -vn -acodec aac "$tempOutputPath"';
 
+        final session = await FFmpegKit.execute(command);
         final returnCode = await session.getReturnCode();
 
         if (!ReturnCode.isSuccess(returnCode)) {
+          final logs = await session.getLogs();
+          print('FFmpeg hata logları: ${logs.join("\n")}');
           throw Exception('Ses dönüştürme başarısız oldu');
         }
 
@@ -123,6 +126,7 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
         Navigator.of(context).pop(true);
       }
     } catch (e) {
+      print('Hata detayı: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('İndirme hatası: $e')),
@@ -143,29 +147,6 @@ class _YoutubeSearchScreenState extends ConsumerState<YoutubeSearchScreen> {
 
       ref.read(youtubeSearchProvider.notifier).setDownloading(false);
       ref.read(youtubeSearchProvider.notifier).updateDownloadProgress(0);
-    }
-  }
-
-  String _getSafeFileName(String title) {
-    return title
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .trim()
-        .replaceAll(RegExp(r'\s+'), '_')
-        .toLowerCase();
-  }
-
-  Future<void> _cleanupTempFiles(List<String?> paths) async {
-    for (final path in paths) {
-      if (path != null) {
-        try {
-          final file = File(path);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        } catch (e) {
-          print('Dosya temizleme hatası: $e');
-        }
-      }
     }
   }
 
